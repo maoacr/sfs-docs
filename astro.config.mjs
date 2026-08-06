@@ -1,0 +1,37 @@
+// @ts-check
+import { defineConfig } from 'astro/config';
+import starlight from '@astrojs/starlight';
+
+// https://astro.build/config
+export default defineConfig({
+	integrations: [
+		starlight({
+			title: 'SFS',
+			social: [],
+			sidebar: [
+				{
+					label: 'Visión',
+					items: [
+						{ label: 'Producto', slug: 'vision/producto' },
+						{ label: 'Modelo de Datos', slug: 'vision/data-model' },
+						{ label: 'Flujo de Reservas', slug: 'vision/flujo-reservas' },
+						{ label: 'Modo Offline (PWA)', slug: 'vision/offline-pwa' },
+						{
+							label: 'MVP',
+							collapsed: false,
+							items: [
+								{ label: 'Alcance', slug: 'vision/mvp/alcance' },
+							],
+						},
+					],
+				},
+				{
+					label: 'API',
+					items: [
+						{ label: 'REST', slug: 'api/rest' },
+					],
+				},
+			],
+		}),
+	],
+});

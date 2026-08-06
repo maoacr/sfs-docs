@@ -1,0 +1,75 @@
+---
+title: Flujo de Reservas
+description: Cómo funciona el sistema de reservas, bloqueo de slots y validación de pagos.
+---
+
+## Estados de una reserva
+
+```
+Jugador selecciona slot
+        │
+        ▼
+┌─────────────────┐
+│ PENDIENTE_PAGO  │  ← Slot BLOQUEADO para otros jugadores
+│ (TTL: 15 min)   │
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │         │
+    ▼         ▼
+┌───────┐  ┌──────────┐
+│Pago OK│  │Timeout /  │
+│       │  │Cancelar   │
+└───┬───┘  └─────┬─────┘
+    │            │
+    ▼            ▼
+┌──────────┐  ┌──────────┐
+│CONFIRMADA│  │CANCELADA │  ← Slot LIBERADO
+└────┬─────┘  └──────────┘
+     │
+     ▼
+┌──────────┐
+│COMPLETADA│  (fecha/hora ya pasó)
+└──────────┘
+```
+
+## Reglas de bloqueo
+
+1. **Cuando un jugador selecciona un slot** para reservar, el sistema crea una reserva en estado `PENDIENTE_PAGO`.
+
+2. **El slot queda BLOQUEADO** — ningún otro jugador puede reservar ese mismo horario en esa cancha mientras exista una reserva `PENDIENTE_PAGO` activa.
+
+3. **TTL de 15 minutos**: si el pago no se confirma en 15 minutos, la reserva expira y el slot se libera automáticamente.
+
+4. **Validación de pago**: la reserva pasa a `CONFIRMADA` cuando:
+   - El jugador completa el pago en MercadoPago (vía webhook), O
+   - El dueño marca manualmente el pago como verificado desde su panel
+
+5. **Reservas manuales del dueño**: cuando el owner crea una reserva manual, pasa directamente a estado `CONFIRMADA` (no requiere pago).
+
+## Bloqueo por solapamiento
+
+El sistema valida que no existan dos reservas activas (`PENDIENTE_PAGO` o `CONFIRMADA`) para la misma cancha con horarios solapados:
+
+```sql
+SELECT * FROM reservas
+WHERE cancha_id = $1
+  AND estado IN ('PENDIENTE_PAGO', 'CONFIRMADA')
+  AND slot_inicio < $fin
+  AND slot_fin > $inicio
+```
+
+Si existe un conflicto, la API devuelve `409 Conflict`.
+
+## Notificaciones al dueño
+
+- El dueño ve las reservas `CONFIRMADAS` en su dashboard (stat "Reservas hoy")
+- En la sección Reservas puede filtrar por complejo, cancha y fecha
+- Puede cambiar el estado de una reserva manualmente (cancelar, marcar como completada)
+
+## Próximas mejoras
+
+- [ ] TTL automático: job que libera slots `PENDIENTE_PAGO` expirados
+- [ ] Webhook de MercadoPago: actualización automática de estado al recibir pago
+- [ ] Notificaciones push/email al dueño cuando se crea una reserva
+- [ ] Notificaciones al jugador: confirmación, recordatorio, cancelación

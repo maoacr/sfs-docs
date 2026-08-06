@@ -1,0 +1,132 @@
+---
+title: Alcance del MVP
+description: Funcionalidad mínima viable de la Fase 1 — SaaS de gestión de canchas de fútbol.
+---
+
+El MVP cubre exclusivamente la **gestión de canchas**: dueños configuran sus espacios, jugadores descubren, reservan y pagan. Todo lo relacionado con torneos, equipos y red social queda para fases posteriores.
+
+## Funcionalidades
+
+### Dueño (owner)
+
+| Feature | Descripción | Prioridad |
+|---|---|---|
+| Registro y login | Crear cuenta como dueño de canchas | P0 |
+| CRUD de canchas | Crear, editar, eliminar canchas (nombre, tipo, capacidad, fotos, servicios) | P0 |
+| Configuración de slots | Definir bloques de tiempo por cancha (duración configurable: 30min, 1h, 2h...) | P0 |
+| Precios dinámicos | Tarifas base + reglas por día/hora + descuentos por volumen + promociones | P0 |
+| Reservas manuales | El dueño puede cargar una reserva a nombre de un cliente (adopción progresiva) | P0 |
+| Panel de reservas | Ver reservas del día/semana, estados, filtros | P0 |
+| Gestión de clientes | Base de datos de clientes frecuentes con historial de reservas | P1 |
+| Notificaciones | Envío de confirmaciones, recordatorios y mensajes a clientes | P1 |
+| Reportes básicos | Ocupación por cancha, ingresos semanales/mensuales | P1 |
+
+### Jugador (player)
+
+| Feature | Descripción | Prioridad |
+|---|---|---|
+| Registro y login | Crear cuenta como jugador (email, Google, teléfono) | P0 |
+| Búsqueda por ubicación | Geolocalización para mostrar canchas cercanas | P0 |
+| Filtros | Por tipo de cancha, horario disponible, precio | P0 |
+| Reserva | Seleccionar cancha, slot, confirmar y pagar | P0 |
+| Disclaimer de presencialidad | Alerta visible: debe presentarse físicamente para acceder a la cancha | P0 |
+| Pago integrado | Mercado Pago como pasarela | P0 |
+| Historial de reservas | Ver reservas pasadas y futuras | P1 |
+
+## Fuera del MVP
+
+Estas funcionalidades están **explícitamente excluidas** del MVP:
+
+- Torneos (ligas, copas, brackets)
+- Perfil de árbitro y calificaciones
+- Equipos de fútbol e invitaciones
+- Rating de jugadores
+- Partidos casuales con cupos
+- Mercado de jugadores
+- App mobile nativa
+- Notificaciones push
+- Multi-idioma
+
+## Estados de reserva
+
+```
+pendiente_pago → confirmada → completada
+                 ↘ cancelada
+```
+
+- **pendiente_pago**: El jugador inició la reserva pero no pagó. Expira tras N minutos.
+- **confirmada**: Pago realizado. La cancha está reservada.
+- **completada**: La reserva ya ocurrió (fecha/hora pasada).
+- **cancelada**: Cancelada por el dueño o por el jugador (con política de reembolso si aplica).
+
+## Modelo de precios (MVP)
+
+El MVP implementará el motor de reglas **opción C — dinámico full**:
+
+```
+Precio final = precio_base_cancha × factor_dia_hora − descuento_volumen − código_promoción
+```
+
+> ⚠️ **Todos los valores monetarios, porcentajes y reglas son 100% parametrizables por cada dueño.** Los ejemplos a continuación son ilustrativos. El sistema no define precios — cada dueño configura los suyos desde su panel.
+
+| Regla | Ejemplo (configurable por dueño) |
+|---|---|
+| **Precio base** | Cancha F5: $XX/hora |
+| **Tarifa por franja** | Día + rango horario → ±X% |
+| **Descuento por volumen** | N+ horas → −X% |
+| **Código promocional** | Código personalizado → −X% o −$X |
+
+Las reglas son configurables por el dueño desde su panel, con validación de no superposición de franjas.
+
+## Modelo de datos inicial (conceptual)
+
+```
+┌─────────────┐       ┌─────────────┐       ┌──────────────┐
+│   owner     │       │   cancha    │       │   reserva     │
+├─────────────┤       ├─────────────┤       ├───────────────┤
+│ id          │──┐    │ id          │──┐    │ id            │
+│ tenant_id   │  │    │ tenant_id   │  │    │ tenant_id     │
+│ name        │  │    │ owner_id    │←─┘    │ cancha_id     │←──┐
+│ email       │  │    │ name        │       │ player_id     │   │
+│ ...         │  │    │ tipo        │       │ slot_inicio   │   │
+└─────────────┘  │    │ capacidad   │       │ slot_fin      │   │
+                 │    │ precio_base │       │ estado        │   │
+┌─────────────┐  │    │ ...         │       │ monto_total   │   │
+│   player    │  │    └─────────────┘       │ ...           │   │
+├─────────────┤  │                          └───────────────┘   │
+│ id          │  │    ┌─────────────┐                            │
+│ email       │  │    │  tarifa     │       ┌───────────────┐   │
+│ name        │  │    ├─────────────┤       │   pago        │   │
+│ phone       │  │    │ cancha_id   │──────→│ reserva_id    │───┘
+│ ubicacion   │  │    │ dia_semana  │       │ monto         │
+│ ...         │  │    │ hora_inicio │       │ mp_id         │
+└─────────────┘  │    │ hora_fin    │       │ estado        │
+                 │    │ factor      │       │ ...           │
+      ┌──────────┘    │ ...         │       └───────────────┘
+      │               └─────────────┘
+      │
+      │  Cada tabla incluye tenant_id para el
+      │  aislamiento multi-tenant
+      │
+      └──→ owner.id = cancha.owner_id  (un dueño, muchas canchas)
+```
+
+## Decisiones técnicas (confirmadas)
+
+| Decisión | Elección |
+|---|---|
+| Backend | Node.js + TypeScript (API Routes de Next.js en Vercel) |
+| Base de datos | PostgreSQL + PostGIS en Supabase |
+| ORM | Prisma |
+| Frontend | Next.js (App Router) |
+| Auth | Manual — bcrypt + JWT + refresh tokens |
+| Pagos | Mercado Pago |
+| Storage | Supabase Storage (fotos de canchas) |
+| Testing | Unit + Integration (Vitest + Supertest) |
+| Monorepo | pnpm workspaces |
+| Hosting | Vercel (frontend + API) + Supabase (DB + storage) |
+
+## Preguntas pendientes
+
+- [ ] Ninguna — todas las decisiones técnicas están confirmadas
+- [ ] Próximo paso: diseño del modelo de datos en detalle

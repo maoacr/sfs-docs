@@ -1,0 +1,365 @@
+---
+title: Modelo de Datos
+description: Diseño detallado de la base de datos — entidades, relaciones, tipos, índices y decisiones de diseño.
+---
+
+## Convenciones
+
+- **Nombres en español** para entidades de negocio (`cancha`, `reserva`, `pago`)
+- **Nombres en inglés** para conceptos técnicos/universales (`user`, `tenant`, `role`)
+- **IDs**: UUID v4 en todas las tablas (mejor que autoincrement para escalar horizontalmente y seguridad)
+- **Timestamps**: `created_at` y `updated_at` en TODAS las tablas
+- **Soft delete**: `deleted_at` en entidades principales (cancha, reserva) — no se borran físicamente
+- **`tenant_id`**: presente en toda tabla que pertenezca a un dueño
+
+## Multi-tenancy
+
+Cada tabla de negocio incluye `tenant_id` que referencia al `user.id` del dueño. El middleware de API inyecta el `tenant_id` del JWT en cada query. No hay forma de que un dueño vea datos de otro — el filtro es forzado a nivel de capa de datos, no de aplicación.
+
+```
+┌─────────────────────────────────────────────────┐
+│  SELECT * FROM cancha WHERE tenant_id = $1      │
+│                         ↑                        │
+│                   extraído del JWT               │
+└─────────────────────────────────────────────────┘
+```
+
+## Diagrama entidad-relación
+
+```mermaid
+erDiagram
+    User ||--o{ Cancha : "posee (owner)"
+    User ||--o{ Reserva : "realiza (player)"
+    Cancha ||--o{ SlotConfig : "tiene"
+    Cancha ||--o{ Tarifa : "tiene"
+    Cancha ||--o{ Reserva : "recibe"
+    Cancha ||--o{ ImagenCancha : "tiene"
+    Reserva ||--|| Pago : "tiene"
+    Tarifa ||--o{ Promocion : "puede tener"
+
+    User {
+        uuid id PK
+        string email UK
+        string password_hash
+        string primer_nombre
+        string segundo_nombre "nullable"
+        string apellidos
+        string apodo "unique, nullable"
+        string codigo_pais "default: +57"
+        string telefono "nullable"
+        enum role "OWNER | PLAYER"
+        datetime deleted_at "soft delete"
+    }
+
+    Cancha {
+        uuid id PK
+        uuid tenant_id FK "owner user.id"
+        string nombre
+        enum tipo "F5 | F6 | F7 | F8 | F9 | F11"
+        int capacidad
+        string direccion
+        point ubicacion "PostGIS geometry"
+        string descripcion
+        jsonb servicios "['vestidores','cafeteria','parqueadero']"
+        int duracion_slot_minutos "default: 60"
+        datetime deleted_at
+    }
+
+    SlotConfig {
+        uuid id PK
+        uuid cancha_id FK
+        int dia_semana "0=Domingo, 6=Sábado"
+        time hora_apertura
+        time hora_cierre
+    }
+
+    Tarifa {
+        uuid id PK
+        uuid cancha_id FK
+        decimal precio_base
+        int dia_semana "null = todos los días"
+        time hora_inicio "null = todo el día"
+        time hora_fin
+        decimal factor "1.0 = precio base"
+    }
+
+    Reserva {
+        uuid id PK
+        uuid tenant_id FK
+        uuid cancha_id FK
+        uuid player_id FK
+        timestamp slot_inicio
+        timestamp slot_fin
+        decimal monto_total
+        enum estado "PENDIENTE_PAGO | CONFIRMADA | COMPLETADA | CANCELADA"
+        datetime deleted_at
+    }
+
+    Pago {
+        uuid id PK
+        uuid reserva_id FK
+        decimal monto
+        enum estado_pago "PENDIENTE | APROBADO | RECHAZADO | REEMBOLSADO"
+        string mp_preference_id "Mercado Pago"
+        string mp_payment_id
+        jsonb mp_metadata
+    }
+
+    ImagenCancha {
+        uuid id PK
+        uuid cancha_id FK
+        string url
+        int orden
+        bool principal
+    }
+
+    Promocion {
+        uuid id PK
+        uuid tarifa_id FK
+        string codigo "ej: AMIGOS10"
+        enum tipo_descuento "PORCENTAJE | MONTO_FIJO"
+        decimal valor
+        datetime valido_desde
+        datetime valido_hasta
+        int usos_maximos "null = ilimitado"
+        int usos_actuales
+    }
+```
+
+## Tablas en detalle
+
+### `users`
+
+Tabla única para dueños y jugadores. El campo `role` determina los permisos.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | Generado por Prisma (`@default(uuid())`) |
+| `email` | `VARCHAR(255)` UNIQUE | Login + notificaciones |
+| `password_hash` | `VARCHAR(255)` | bcrypt, nunca el password plano |
+| `primer_nombre` | `VARCHAR(50)` | Primer nombre |
+| `segundo_nombre` | `VARCHAR(50)` nullable | Segundo nombre (opcional) |
+| `apellidos` | `VARCHAR(100)` | Apellidos completos |
+| `apodo` | `VARCHAR(30)` UNIQUE nullable | Handle único en el sistema — futuras menciones, puntuaciones, transacciones |
+| `codigo_pais` | `VARCHAR(5) DEFAULT '+57'` | Código de país para teléfono |
+| `telefono` | `VARCHAR(15)` nullable | Número sin código de país |
+| `role` | `ENUM('OWNER', 'PLAYER')` | Un usuario puede tener un solo rol en MVP |
+| `deleted_at` | `TIMESTAMPTZ` | Soft delete |
+
+**Decisiones**:
+- Nombre separado en `primer_nombre`, `segundo_nombre`, `apellidos`: permite búsquedas por cualquier campo y formato flexible en UI.
+- `apodo` como handle único: será usado para menciones (`@carlitosgomez`), puntuaciones, y como identificador público en el sistema.
+- `codigo_pais` por defecto `+57` (Colombia): target primario, extensible a otros países.
+- UUID en vez de autoincrement: no expone cuántos usuarios hay, imposible iterar IDs.
+
+### `canchas`
+
+El corazón del negocio. Cada dueño configura sus espacios.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `tenant_id` | `UUID` FK → `users.id` | El dueño |
+| `nombre` | `VARCHAR(100)` | "Cancha Principal", "Fútbol 7 Techada" |
+| `tipo` | `ENUM('F5','F6','F7','F8','F9','F11')` | Cantidad de jugadores |
+| `capacidad` | `INT` | Jugadores totales (ej: 10 para F5, 14 para F7) |
+| `direccion` | `TEXT` | Dirección física |
+| `ubicacion` | `GEOMETRY(POINT)` | Lat/Lng para PostGIS. Índice espacial. |
+| `descripcion` | `TEXT` | Descripción libre |
+| `servicios` | `JSONB` | `["vestidores", "cafeteria", "parqueadero"]` |
+| `duracion_slot_minutos` | `INT DEFAULT 60` | Cuánto dura cada bloque de reserva |
+| `deleted_at` | `TIMESTAMPTZ` | |
+
+**Decisiones**:
+- `tipo` como ENUM, no como string libre. Estandariza búsquedas y filtros.
+- `servicios` como JSONB, no como tabla relacionada. Son pocos datos, poca variación, y se consultan siempre junto a la cancha. No justifica un JOIN.
+- `duracion_slot_minutos` define el bloque base (30, 60, 90, 120). El dueño lo elige por cancha.
+
+### `slot_configs`
+
+Define los días y horarios en que una cancha está disponible.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `cancha_id` | `UUID` FK → `canchas.id` | |
+| `dia_semana` | `INT` | 0=Domingo, 1=Lunes... 6=Sábado |
+| `hora_apertura` | `TIME` | Ej: `'08:00'` |
+| `hora_cierre` | `TIME` | Ej: `'23:00'` |
+
+**Ejemplo**: Cancha F5 disponible Lunes a Viernes 8:00-23:00 y Sábados 9:00-20:00 → 6 registros en esta tabla.
+
+**Decisión**: No usamos `DATERANGE` ni `TSRANGE` para los slots porque los horarios son semanales, no por fecha específica. La disponibilidad real en una fecha se calcula: `slot_configs` − `reservas` en ese rango.
+
+### `tarifas`
+
+Motor de precios dinámicos. Una cancha puede tener múltiples tarifas que compiten por "quién aplica".
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `cancha_id` | `UUID` FK → `canchas.id` | |
+| `precio_base` | `DECIMAL(10,2)` | Precio por slot (ej: 15000) |
+| `dia_semana` | `INT` nullable | `null` = aplica todos los días |
+| `hora_inicio` | `TIME` nullable | `null` = todo el día |
+| `hora_fin` | `TIME` nullable | |
+| `factor` | `DECIMAL(3,2) DEFAULT 1.0` | Multiplicador: 1.0=normal, 1.5=+50% |
+
+**Lógica de resolución**: Cuando se calcula el precio de un slot, se busca la tarifa más específica que aplique:
+
+```sql
+-- Buscar tarifa que aplique para un día y hora específicos
+SELECT * FROM tarifas
+WHERE cancha_id = $1
+  AND (dia_semana IS NULL OR dia_semana = $2)
+  AND (hora_inicio IS NULL OR hora_inicio <= $3)
+  AND (hora_fin IS NULL OR hora_fin >= $3)
+ORDER BY
+  dia_semana IS NOT NULL DESC,  -- prefiero específica sobre general
+  hora_inicio IS NOT NULL DESC
+LIMIT 1;
+```
+
+**Ejemplo de configuración**:
+
+| precio_base | día | hora | factor | Significa |
+|---|---|---|---|---|
+| 15000 | null | null | 1.0 | Precio base default: $15.000 |
+| 15000 | 5 (Vie) | 18:00-23:00 | 1.3 | Viernes noche: +30% |
+| 15000 | 6 (Sáb) | null | 1.5 | Sábado todo el día: +50% |
+
+### `reservas`
+
+El evento central del sistema. Un jugador reserva una cancha en un slot específico.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `tenant_id` | `UUID` FK → `users.id` | Dueño de la cancha |
+| `cancha_id` | `UUID` FK → `canchas.id` | |
+| `player_id` | `UUID` FK → `users.id` | Jugador que reserva |
+| `slot_inicio` | `TIMESTAMPTZ` | Fecha y hora de inicio |
+| `slot_fin` | `TIMESTAMPTZ` | Fecha y hora de fin |
+| `monto_total` | `DECIMAL(10,2)` | Precio final aplicado (calculado al reservar) |
+| `estado` | `ENUM('PENDIENTE_PAGO','CONFIRMADA','COMPLETADA','CANCELADA')` | |
+| `deleted_at` | `TIMESTAMPTZ` | |
+
+**Decisiones**:
+- `monto_total` se calcula al momento de crear la reserva y se congela. Si el dueño cambia precios después, no afecta reservas existentes. Esto es importante para integridad financiera.
+- `PENDIENTE_PAGO` tiene TTL: si no se paga en N minutos (ej: 15), se libera el slot.
+- `slot_inicio` y `slot_fin` validan contra `slot_configs` de la cancha.
+- **Constraint UNIQUE**: No puede haber dos reservas confirmadas para la misma cancha con solapamiento de horario.
+
+### `pagos`
+
+Registro de transacciones de Mercado Pago. Una reserva tiene exactamente un pago (relación 1:1).
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `reserva_id` | `UUID` UNIQUE FK → `reservas.id` | 1:1 |
+| `monto` | `DECIMAL(10,2)` | Debería coincidir con `reserva.monto_total` |
+| `estado_pago` | `ENUM('PENDIENTE','APROBADO','RECHAZADO','REEMBOLSADO')` | |
+| `mp_preference_id` | `VARCHAR(255)` | ID de preferencia en Mercado Pago |
+| `mp_payment_id` | `VARCHAR(255)` | ID del pago (cuando se completa) |
+| `mp_metadata` | `JSONB` | Respuesta completa del webhook |
+
+**Flujo**:
+1. Jugador inicia reserva → `reserva.estado = PENDIENTE_PAGO`
+2. Backend crea preferencia en MP → `pago.mp_preference_id`
+3. Jugador paga en MP → webhook actualiza `pago.estado_pago = APROBADO`
+4. Backend actualiza `reserva.estado = CONFIRMADA`
+
+### `imagenes_canchas`
+
+Galería de fotos de cada cancha. Almacenadas en Supabase Storage.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `cancha_id` | `UUID` FK → `canchas.id` | |
+| `url` | `VARCHAR(500)` | URL pública de Supabase Storage |
+| `orden` | `INT` | Para ordenar en el carrusel |
+| `principal` | `BOOL DEFAULT false` | Imagen de portada |
+
+### `promociones`
+
+Códigos de descuento vinculados a tarifas.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `tarifa_id` | `UUID` FK → `tarifas.id` | Tarifa sobre la que aplica |
+| `codigo` | `VARCHAR(50)` UNIQUE | `AMIGOS10`, `VERANO2026` |
+| `tipo_descuento` | `ENUM('PORCENTAJE','MONTO_FIJO')` | |
+| `valor` | `DECIMAL(10,2)` | 10 = 10% o $10.000 según tipo |
+| `valido_desde` | `TIMESTAMPTZ` | |
+| `valido_hasta` | `TIMESTAMPTZ` | |
+| `usos_maximos` | `INT` nullable | `null` = ilimitado |
+| `usos_actuales` | `INT DEFAULT 0` | |
+
+## Índices
+
+```sql
+-- Búsqueda geoespacial: "canchas cerca de mí"
+CREATE INDEX idx_canchas_ubicacion ON canchas USING GIST (ubicacion);
+
+-- Búsqueda de disponibilidad
+CREATE INDEX idx_reservas_slot ON reservas (cancha_id, slot_inicio, slot_fin)
+  WHERE estado IN ('PENDIENTE_PAGO', 'CONFIRMADA');
+
+-- Filtro por tipo de cancha
+CREATE INDEX idx_canchas_tipo ON canchas (tipo) WHERE deleted_at IS NULL;
+
+-- Búsqueda de promociones por código
+CREATE INDEX idx_promociones_codigo ON promociones (codigo)
+  WHERE valido_hasta > NOW();
+
+-- Tenant isolation (todas las queries lo usan)
+CREATE INDEX idx_canchas_tenant ON canchas (tenant_id);
+CREATE INDEX idx_reservas_tenant ON reservas (tenant_id);
+```
+
+## Decisiones de diseño explicadas
+
+### ¿Por qué UUID y no autoincrement?
+
+```typescript
+// Con autoincrement, un atacante puede iterar:
+GET /api/reservas/1
+GET /api/reservas/2
+GET /api/reservas/3  // esto expone datos de otros
+
+// Con UUID:
+GET /api/reservas/a1b2c3d4-...  // imposible adivinar
+
+// Además, UUID permite generar IDs en el frontend
+// sin esperar al INSERT (optimistic UI)
+```
+
+### ¿Por qué `monto_total` en reserva se congela?
+
+Si el dueño cambia el precio de una cancha de $15.000 a $18.000, las reservas ya confirmadas a $15.000 no deberían verse afectadas. Guardamos el monto al momento de crear la reserva y no lo recalculamos.
+
+### ¿Por qué `servicios` es JSONB y no tabla?
+
+Los servicios de una cancha (`vestidores`, `cafeteria`) son:
+- Pocos (5-10 máximo)
+- Poco profundos (solo un nombre o ícono)
+- Siempre se consultan junto con la cancha
+
+Una tabla `servicios` con un JOIN es costo innecesario para este caso. Si en el futuro los servicios tienen precios, horarios o configuraciones propias, migramos a tabla. Por ahora JSONB.
+
+### ¿Por qué `slot_configs` usa día de semana y no fechas concretas?
+
+Los horarios de una cancha son patrones semanales ("Lunes a Viernes 8-23, Sábado 9-20"). Si usáramos fechas concretas (`slot_inicio TIMESTAMP`) tendríamos que generar registros infinitos hacia el futuro. En cambio, calculamos disponibilidad dinámicamente:
+
+```
+disponibilidad(semana) = slot_configs − reservas_confirmadas(semana)
+```
+
+## Próximos pasos
+
+- [ ] Traducir este modelo a un schema de Prisma (`schema.prisma`)
+- [ ] Definir las migraciones iniciales
+- [ ] Implementar seed data para desarrollo

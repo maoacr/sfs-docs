@@ -1,0 +1,132 @@
+---
+title: API REST
+description: Endpoints disponibles en el MVP.
+---
+
+Todas las rutas que no son públicas requieren autenticación vía cookie `sfs_token` (JWT). Las rutas de administración requieren además rol `OWNER`.
+
+## Autenticación
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | ❌ | Login — devuelve JWT en cookie `sfs_token` |
+| `POST` | `/api/auth/register` | ❌ | Registro — crea usuario y devuelve JWT |
+| `POST` | `/api/auth/logout` | ❌ | Cierra sesión — borra cookies |
+
+### Login
+
+```json
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "dueno@test.com",
+  "password": "test1234"
+}
+
+// 200 OK
+{
+  "user": {
+    "id": "uuid",
+    "email": "dueno@test.com",
+    "nombre": "Carlos Andrés Gómez Pérez",
+    "apodo": "carlitosgomez",
+    "role": "OWNER"
+  }
+}
+```
+
+### Registro
+
+```json
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "email": "nuevo@test.com",
+  "password": "test1234",
+  "primerNombre": "Pedro",
+  "segundoNombre": "",
+  "apellidos": "Ramírez",
+  "apodo": "pedroramirez",
+  "codigoPais": "+57",
+  "telefono": "3001112233",
+  "role": "PLAYER"
+}
+
+// 201 Created
+{
+  "user": {
+    "id": "uuid",
+    "email": "nuevo@test.com",
+    "nombre": "Pedro Ramírez",
+    "apodo": "pedroramirez",
+    "role": "PLAYER"
+  }
+}
+```
+
+## Canchas
+
+Todas requieren cookie `sfs_token` con rol `OWNER`.
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/canchas` | Lista canchas del owner |
+| `POST` | `/api/canchas` | Crea una cancha |
+| `GET` | `/api/canchas/[id]` | Detalle de una cancha |
+| `PUT` | `/api/canchas/[id]` | Actualiza datos de la cancha |
+| `DELETE` | `/api/canchas/[id]` | Soft delete |
+
+### Query params para GET
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `activas` | `boolean` | `true` para filtrar solo canchas no eliminadas |
+
+### Crear cancha
+
+```json
+POST /api/canchas
+
+{
+  "nombre": "Fútbol 7 Techada",
+  "tipo": "F7",
+  "capacidad": 14,
+  "direccion": "Carrera 45 #67-89, Medellín",
+  "descripcion": "Cancha techada con iluminación LED",
+  "servicios": ["vestidores", "cafeteria", "iluminacion"],
+  "duracionSlotMinutos": 60
+}
+```
+
+## Slots (horarios)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/canchas/[id]/slots` | Lista slots de la cancha |
+| `POST` | `/api/canchas/[id]/slots` | Crea un slot |
+| `PUT` | `/api/canchas/[id]/slots/[slotId]` | Actualiza horario del slot |
+| `DELETE` | `/api/canchas/[id]/slots/[slotId]` | Elimina un slot |
+
+## Tarifas (precios)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/canchas/[id]/tarifas` | Crea una tarifa |
+| `PUT` | `/api/canchas/[id]/tarifas/[tarifaId]` | Actualiza tarifa |
+| `DELETE` | `/api/canchas/[id]/tarifas/[tarifaId]` | Elimina tarifa |
+
+## Sync (offline)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/sync` | Recibe operaciones pendientes del Sync Engine offline |
+
+## Seguridad
+
+- **Tenant isolation**: todas las queries filtran por `tenantId` extraído del JWT.
+- **Cookies HttpOnly**: `sfs_token` y `sfs_refresh` no son accesibles desde JavaScript.
+- **bcrypt**: contraseñas hasheadas con 12 rounds.
+- **JWT**: access token expira en 15 min, refresh token en 7 días.
+- **Rate limiting**: pendiente de implementar.
