@@ -9,7 +9,7 @@ Documentación técnica del proyecto **SFS** — SaaS multi-tenant para gestión
 | Framework | [Astro](https://astro.build) + [Starlight](https://starlight.astro.build) |
 | Lenguaje | MDX (Markdown + JSX) |
 | Hosting | Vercel |
-| Monorepo | [`maoacr/sfs`](https://github.com/maoacr/sfs) |
+| Proyecto | [`maoacr/sfs-web`](https://github.com/maoacr/sfs-web) |
 
 ## Estructura
 
@@ -46,4 +46,4 @@ El sitio se despliega automáticamente en Vercel al pushear a `main`.
 
 ---
 
-Proyecto principal: [`maoacr/sfs`](https://github.com/maoacr/sfs)
+Proyecto principal: [`maoacr/sfs-web`](https://github.com/maoacr/sfs-web)

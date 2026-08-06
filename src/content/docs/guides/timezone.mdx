@@ -94,4 +94,4 @@ Este bug ocurrió en producción (Agosto 2026) y costó 1 hora de debugging:
 4. Pero construye la fecha con `new Date("2026-08-06T18:00:00Z")` → 13:00 hora local ❌
 5. Resultado: slots mostrados de 13:00 a 17:00 en vez de 18:00 a 22:00
 
-**Fix**: quitar `Z` de las 3 ocurrencias en `apps/web/src/app/api/disponibilidad/route.ts` (líneas 50, 78, 79).
+**Fix**: quitar `Z` de las 3 ocurrencias en `src/app/api/disponibilidad/route.ts` (líneas 50, 78, 79).
