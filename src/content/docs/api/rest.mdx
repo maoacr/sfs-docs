@@ -123,6 +123,62 @@ POST /api/canchas
 |---|---|---|
 | `POST` | `/api/sync` | Recibe operaciones pendientes del Sync Engine offline |
 
+## Reservas
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `GET` | `/api/reservas` | ✅ | Lista reservas (owner ve sus canchas, player ve las propias) |
+| `POST` | `/api/reservas` | ✅ | Crea una reserva (estado: `PENDIENTE_PAGO`) |
+| `PUT` | `/api/reservas/[id]` | ✅ | Cambia estado (`CANCELADA`, `COMPLETADA`) |
+| `POST` | `/api/reservas/liberar-expiradas` | ❌ | Libera reservas `PENDIENTE_PAGO` que excedieron TTL (15 min) |
+
+### GET query params
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `fecha` | `YYYY-MM-DD` | Filtra por día |
+| `estado` | `PENDIENTE_PAGO\|CONFIRMADA\|COMPLETADA\|CANCELADA` | Filtra por estado |
+
+### Crear reserva
+
+```json
+POST /api/reservas
+
+{
+  "canchaId": "uuid",
+  "slotInicio": "2026-08-10T18:00:00",
+  "slotFin": "2026-08-10T19:00:00"
+}
+```
+
+## Disponibilidad
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `GET` | `/api/disponibilidad` | ✅ | Busca canchas disponibles con slots libres/ocupados |
+
+### Query params
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `fecha` | `YYYY-MM-DD` | Requerido — día a consultar |
+| `tipo` | `F5\|F6\|F7\|F8\|F9\|F11` | Opcional — filtrar por tipo de cancha |
+
+## Notificaciones
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `GET` | `/api/notificaciones` | ✅ | Lista notificaciones del usuario |
+| `GET` | `/api/notificaciones?noLeidas=true` | ✅ | Cuenta notificaciones no leídas |
+| `PATCH` | `/api/notificaciones` | ✅ | `{ id }` marca una como leída, `{ todas: true }` marca todas |
+
+## Perfil
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `GET` | `/api/auth/me` | ✅ | Obtiene perfil del usuario autenticado |
+| `PATCH` | `/api/auth/me` | ✅ | Actualiza perfil (nombre, apodo, teléfono)
+
 ## Seguridad
 
 - **Tenant isolation**: todas las queries filtran por `tenantId` extraído del JWT.

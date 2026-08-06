@@ -47,6 +47,43 @@ Jugador selecciona slot
 
 5. **Reservas manuales del dueño**: cuando el owner crea una reserva manual, pasa directamente a estado `CONFIRMADA` (no requiere pago).
 
+## TTL — Liberación automática
+
+Las reservas en estado `PENDIENTE_PAGO` tienen un tiempo máximo de vida de **15 minutos**. Si el pago no se confirma en ese lapso, la reserva se cancela automáticamente y el slot se libera.
+
+### Mecanismo
+
+El TTL usa un enfoque de **limpieza oportunista** — sin cron jobs ni procesos externos:
+
+1. Cada vez que un usuario consulta disponibilidad (`GET /api/disponibilidad`)
+2. Cada vez que se crea una nueva reserva (`POST /api/reservas`)
+3. Manualmente vía `POST /api/reservas/liberar-expiradas`
+
+En cualquiera de estos casos, el sistema barre las reservas `PENDIENTE_PAGO` con más de 15 minutos de antigüedad y las marca como `CANCELADA`.
+
+### Notificaciones de expiración
+
+Cuando una reserva expira:
+- **Jugador**: recibe notificación in-app + email informando que su reserva expiró
+- **Dueño**: recibe notificación de que el slot fue liberado
+
+## Notificaciones
+
+El sistema de notificaciones cubre todos los cambios de estado:
+
+| Evento | Jugador | Dueño |
+|--------|:---:|:---:|
+| Reserva creada | ✅ in-app + email | ❌ |
+| Pago confirmado | ✅ in-app + email | ✅ in-app + email |
+| Reserva cancelada | ✅ in-app + email | ✅ in-app + email |
+| Partido completado | ✅ in-app + email | ❌ |
+| Reserva expirada (TTL) | ✅ in-app + email | ✅ in-app + email |
+
+### Canales
+
+- **In-app**: campanita con badge + drawer de notificaciones (persistente, marca como leída)
+- **Email**: vía Resend (requiere `RESEND_API_KEY` en `.env`)
+
 ## Bloqueo por solapamiento
 
 El sistema valida que no existan dos reservas activas (`PENDIENTE_PAGO` o `CONFIRMADA`) para la misma cancha con horarios solapados:
@@ -61,15 +98,7 @@ WHERE cancha_id = $1
 
 Si existe un conflicto, la API devuelve `409 Conflict`.
 
-## Notificaciones al dueño
-
-- El dueño ve las reservas `CONFIRMADAS` en su dashboard (stat "Reservas hoy")
-- En la sección Reservas puede filtrar por complejo, cancha y fecha
-- Puede cambiar el estado de una reserva manualmente (cancelar, marcar como completada)
-
 ## Próximas mejoras
 
-- [ ] TTL automático: job que libera slots `PENDIENTE_PAGO` expirados
 - [ ] Webhook de MercadoPago: actualización automática de estado al recibir pago
-- [ ] Notificaciones push/email al dueño cuando se crea una reserva
-- [ ] Notificaciones al jugador: confirmación, recordatorio, cancelación
+- [ ] Recordatorio al jugador antes del partido
