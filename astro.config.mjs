@@ -31,6 +31,18 @@ export default defineConfig({
 						{ label: 'REST', slug: 'api/rest' },
 					],
 				},
+				{
+					label: 'Guías',
+					items: [
+						{ label: 'Zonas Horarias', slug: 'guides/timezone' },
+					],
+				},
+				{
+					label: 'Referencia',
+					items: [
+						{ label: 'Algoritmo de Disponibilidad', slug: 'reference/disponibilidad' },
+					],
+				},
 			],
 		}),
 	],

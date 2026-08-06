@@ -1,49 +1,49 @@
-# Starlight Starter Kit: Basics
+# SFS Docs
 
-[![Built with Starlight](https://astro.badg.es/v2/built-with-starlight/tiny.svg)](https://starlight.astro.build)
+Documentación técnica del proyecto **SFS** — SaaS multi-tenant para gestión y reservas de canchas de fútbol.
+
+## Stack
+
+| Capa | Tecnología |
+|------|-----------|
+| Framework | [Astro](https://astro.build) + [Starlight](https://starlight.astro.build) |
+| Lenguaje | MDX (Markdown + JSX) |
+| Hosting | Vercel |
+| Monorepo | [`maoacr/sfs`](https://github.com/maoacr/sfs) |
+
+## Estructura
 
 ```
-pnpm create astro@latest -- --template starlight
+docs/
+├── src/content/docs/
+│   ├── index.mdx                  # Landing page
+│   ├── vision/                    # Visión del producto
+│   │   ├── producto.mdx           #   Problema, solución, stack, roadmap
+│   │   ├── data-model.mdx         #   Modelo de datos (ERD, entidades, convenciones)
+│   │   ├── flujo-reservas.mdx     #   Estados de reserva, bloqueo TTL, reglas
+│   │   ├── offline-pwa.mdx        #   Estrategia PWA y service worker
+│   │   └── mvp/alcance.mdx        #   Alcance funcional del MVP
+│   ├── api/rest.mdx               # Endpoints REST documentados
+│   ├── guides/                    # Guías técnicas
+│   └── reference/                 # Referencia de algoritmos y decisiones
+├── astro.config.mjs               # Configuración de Starlight (sidebar, título)
+├── public/                        # Assets estáticos (favicon, etc.)
+└── package.json
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Desarrollo local
 
-## 🚀 Project Structure
-
-Inside of your Astro + Starlight project, you'll see the following folders and files:
-
-```
-.
-├── public/
-├── src/
-│   ├── assets/
-│   ├── content/
-│   │   └── docs/
-│   └── content.config.ts
-├── astro.config.mjs
-├── package.json
-└── tsconfig.json
+```bash
+pnpm install
+pnpm dev          # http://localhost:4321
+pnpm build        # Build de producción
+pnpm preview      # Previsualizar build
 ```
 
-Starlight looks for `.md` or `.mdx` files in the `src/content/docs/` directory. Each file is exposed as a route based on its file name.
+## Despliegue
 
-Images can be added to `src/assets/` and embedded in Markdown with a relative link.
+El sitio se despliega automáticamente en Vercel al pushear a `main`.
 
-Static assets, like favicons, can be placed in the `public/` directory.
+---
 
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `pnpm install`             | Installs dependencies                            |
-| `pnpm dev`             | Starts local dev server at `localhost:4321`      |
-| `pnpm build`           | Build your production site to `./dist/`          |
-| `pnpm preview`         | Preview your build locally, before deploying     |
-| `pnpm astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `pnpm astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Check out [Starlight’s docs](https://starlight.astro.build/), read [the Astro documentation](https://docs.astro.build), or jump into the [Astro Discord server](https://astro.build/chat).
+Proyecto principal: [`maoacr/sfs`](https://github.com/maoacr/sfs)

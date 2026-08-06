@@ -1,0 +1,135 @@
+---
+title: Algoritmo de Disponibilidad
+description: Cómo se calculan los slots disponibles de una cancha — generación, solapamiento con reservas, y timezone handling.
+---
+
+El endpoint `GET /api/disponibilidad` es el corazón del buscador de canchas. Este documento explica el algoritmo paso a paso.
+
+## Entrada
+
+| Parámetro | Tipo | Requerido | Descripción |
+|-----------|------|-----------|-------------|
+| `fecha` | `YYYY-MM-DD` | Sí | Día para el cual se buscan slots |
+| `tipo` | `F5 \| F6 \| F7 \| F8 \| F9 \| F11` | No | Filtrar por tipo de cancha |
+
+## Algoritmo
+
+### Paso 1: Query de canchas
+
+Se consultan todas las canchas activas (`deletedAt: null`) que tengan un `SlotConfig` para el día de la semana de la fecha solicitada.
+
+```prisma
+cancha.findMany({
+  where: {
+    deletedAt: null,
+    tipo: "F5",              // opcional
+    slots: { some: { diaSemana: 3 } }  // miércoles
+  },
+  include: {
+    complejo: { ... },       // nombre, dirección, teléfono
+    slots: { where: { diaSemana } },
+    tarifas: { where: { diaSemana: null }, take: 1 },
+    imagenes: { where: { principal: true }, take: 1 },
+    reservas: { ... }        // del día consultado
+  }
+})
+```
+
+### Paso 2: Generación de slots
+
+Para cada cancha, se toma su `SlotConfig` del día y su `duracionSlotMinutos`:
+
+```
+apertura = 08:00  (desde SlotConfig.horaApertura)
+cierre   = 23:00  (desde SlotConfig.horaCierre)
+duracion = 60 min (desde Cancha.duracionSlotMinutos)
+
+Slots generados:
+  08:00-09:00
+  09:00-10:00
+  10:00-11:00
+  ...
+  22:00-23:00
+```
+
+La generación itera desde `apertura` sumando `duracionSlotMinutos` hasta que `cursor + duracion >= cierre`. El último slot que no entra completo **no se genera**.
+
+### Paso 3: Verificación de solapamiento
+
+Cada slot generado se cruza con las reservas existentes (`PENDIENTE_PAGO` o `CONFIRMADA`) del día. La lógica de solapamiento es:
+
+```ts
+// Hay conflicto si los intervalos se superponen
+hayConflicto = slotInicio < reservaFin && slotFin > reservaInicio
+```
+
+Esto cubre todos los casos:
+- Reserva que empieza antes y termina durante el slot ✅
+- Reserva que empieza durante y termina después del slot ✅
+- Reserva que cubre exactamente el slot ✅
+- Reserva que cubre completamente el slot (más larga) ✅
+
+### Paso 4: Formato de respuesta
+
+```json
+[
+  {
+    "id": "uuid-cancha",
+    "nombre": "Cancha Principal",
+    "tipo": "F5",
+    "capacidad": 10,
+    "descripcion": "Cancha techada con grama sintética",
+    "servicios": ["vestidores", "iluminacion", "techada"],
+    "duracionSlotMinutos": 60,
+    "complejo": {
+      "id": "uuid-complejo",
+      "nombre": "Fútbol Center El Campito",
+      "direccion": "Cra 80 #45-23, Medellín",
+      "telefono": "3001234567"
+    },
+    "precioBase": 60000,
+    "imagen": "https://...",
+    "slots": [
+      {
+        "inicio": "2026-08-06T13:00:00.000Z",
+        "fin": "2026-08-06T14:00:00.000Z",
+        "disponible": true
+      },
+      {
+        "inicio": "2026-08-06T14:00:00.000Z",
+        "fin": "2026-08-06T15:00:00.000Z",
+        "disponible": false,
+        "reserva": {
+          "id": "uuid-reserva",
+          "estado": "CONFIRMADA",
+          "player": "Juan Pérez",
+          "apodo": "juancito",
+          "telefono": "3101112233"
+        }
+      }
+    ]
+  }
+]
+```
+
+## Edge cases
+
+### Cancha sin SlotConfig para el día
+
+Si una cancha no tiene `SlotConfig` para el día de la semana consultado, **no aparece en los resultados**. No se asume horario default.
+
+### Sin reservas en el día
+
+Todos los slots generados aparecen como `disponible: true`. No hay campo `reserva` en la respuesta.
+
+### Reserva que cruza medianoche
+
+El filtro de reservas usa `gte: fechaT00:00:00` y `lte: fechaT23:59:59` en hora local. Una reserva que empieza a las 23:00 y termina a las 01:00 del día siguiente será capturada porque su `slotInicio` cae dentro del rango. Sin embargo, los slots se generan solo hasta el `horaCierre` del `SlotConfig`, así que una reserva que empieza a las 23:30 no generará conflicto porque no hay slot a esa hora.
+
+### Tarifa base
+
+Solo se toma la primera tarifa con `diaSemana: null` (tarifa base). Las tarifas con recargo por franja horaria se implementarán en una fase posterior.
+
+## Timezone
+
+Las fechas se manejan en **hora local (Colombia, UTC-5)**. Ver [Guía de Zonas Horarias](/guides/timezone) para detalles y reglas.

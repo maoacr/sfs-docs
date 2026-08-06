@@ -1,0 +1,97 @@
+---
+title: Manejo de Zonas Horarias
+description: Reglas y decisiones sobre timezone en SFS — por qué hora local, cómo evitar bugs con fechas, y qué NO hacer.
+---
+
+Todo el sistema SFS opera en **hora local de Colombia (UTC-5)**. Esta página documenta el porqué, las reglas, y los errores comunes.
+
+## Decisión de diseño
+
+SFS está orientado al mercado colombiano como target primario. Usar hora local en vez de UTC simplifica:
+
+- Los dueños configuran horarios en su hora natural ("abro de 8am a 11pm")
+- Los jugadores ven slots en hora local sin conversión mental
+- Las queries de base de datos no requieren conversión de timezone
+
+Si en el futuro SFS escala a múltiples países, se migrará a un modelo con `timezone` por complejo y almacenamiento UTC.
+
+## Regla de oro
+
+> **NUNCA usar el sufijo `Z` al construir fechas con `new Date()` a partir de valores de hora local.**
+
+### ❌ Incorrecto
+
+```ts
+// Esto crea 18:00 UTC = 13:00 hora Colombia
+const apertura = new Date("2026-08-06T18:00:00Z");
+```
+
+### ✅ Correcto
+
+```ts
+// Esto crea 18:00 hora local (Colombia)
+const apertura = new Date("2026-08-06T18:00:00");
+```
+
+## Cómo funciona
+
+### Almacenamiento (PostgreSQL)
+
+Las columnas `Timestamptz` almacenan el timestamp en UTC internamente. PostgreSQL convierte automáticamente al insertar/leer según el `timezone` de la sesión.
+
+### Lectura (Prisma)
+
+Prisma devuelve objetos `Date` de JavaScript. Un `Date` en JavaScript **siempre** representa un instante en UTC internamente (milisegundos desde epoch), pero sus métodos como `getHours()` usan la zona horaria local del sistema.
+
+### El bug clásico (y cómo evitarlo)
+
+```ts
+// 🐛 BUG: "Z" fuerza interpretación UTC
+// Si el dueño configuró apertura a las 18:00 (6pm Colombia)
+const hora = 18;
+const fecha = "2026-08-06";
+
+// ❌ MAL: 18:00 UTC = 13:00 Colombia
+const apertura = new Date(`${fecha}T${hora}:00:00Z`);
+// → Los slots se generan desde las 13:00
+
+// ✅ BIEN: 18:00 hora local
+const apertura = new Date(`${fecha}T${hora}:00:00`);
+// → Los slots se generan desde las 18:00
+```
+
+### Serialización para API
+
+Los endpoints devuelven fechas en ISO 8601 (UTC) mediante `toISOString()`. El frontend las convierte a hora local para mostrar:
+
+```ts
+// API response
+{ "inicio": "2026-08-06T23:00:00.000Z" }
+
+// Frontend display (hora Colombia)
+new Date("2026-08-06T23:00:00.000Z").toLocaleTimeString("es-CO", {
+  hour: "2-digit", minute: "2-digit"
+})
+// → "18:00" (6pm Colombia)
+```
+
+## Checklist para nuevas features
+
+Cuando trabajes con fechas en el backend, verificá:
+
+- [ ] ¿Estoy construyendo fechas manualmente con `new Date()`? → Sin `Z`
+- [ ] ¿Estoy usando `getUTCHours()` para extraer horas de un `Date` que viene de la DB? → Correcto, los timestamps de DB están en UTC
+- [ ] ¿Estoy filtrando por rango de fechas en Prisma? → Usar hora local para los límites (`"2026-08-06T23:59:59"` sin Z)
+- [ ] ¿Estoy serializando para API? → `toISOString()` es correcto, el frontend se encarga de la conversión
+
+## Stack trace del bug real
+
+Este bug ocurrió en producción (Agosto 2026) y costó 1 hora de debugging:
+
+1. Dueño configura cancha con horario 18:00-23:00
+2. `SlotConfig.horaApertura` se almacena como `1970-01-01T18:00:00.000Z` en PostgreSQL
+3. El código extrae la hora con `getUTCHours()` → `18` ✅
+4. Pero construye la fecha con `new Date("2026-08-06T18:00:00Z")` → 13:00 hora local ❌
+5. Resultado: slots mostrados de 13:00 a 17:00 en vez de 18:00 a 22:00
+
+**Fix**: quitar `Z` de las 3 ocurrencias en `apps/web/src/app/api/disponibilidad/route.ts` (líneas 50, 78, 79).
