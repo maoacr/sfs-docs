@@ -4,13 +4,17 @@ import starlight from '@astrojs/starlight';
 
 // https://astro.build/config
 export default defineConfig({
+	site: 'https://sfsdocs.maoacr.com',
 	integrations: [
 		starlight({
 			title: '⚽ SFS',
 			head: [
-				{ tag: 'meta', attrs: { property: 'og:image', content: 'https://sfsdocs.maoacr.com/og-image.svg' } },
+				{ tag: 'meta', attrs: { property: 'og:image', content: 'https://sfsdocs.maoacr.com/og-image.png' } },
+				{ tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+				{ tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+				{ tag: 'meta', attrs: { property: 'og:image:type', content: 'image/png' } },
 				{ tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
-				{ tag: 'meta', attrs: { name: 'twitter:image', content: 'https://sfsdocs.maoacr.com/og-image.svg' } },
+				{ tag: 'meta', attrs: { name: 'twitter:image', content: 'https://sfsdocs.maoacr.com/og-image.png' } },
 			],
 			social: [],
 			customCss: ['./src/styles/custom.css'],

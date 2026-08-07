@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://sfsdocs.maoacr.com/sitemap-index.xml
