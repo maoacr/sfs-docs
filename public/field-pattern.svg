@@ -2,9 +2,9 @@
   <!-- Campo de fútbol — líneas decorativas para fondo -->
   <defs>
     <linearGradient id="field-gradient" x1="0" y1="0" x2="400" y2="400">
-      <stop offset="0%" stop-color="#0a5c2a" stop-opacity="0.2"/>
-      <stop offset="50%" stop-color="#16a34a" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="#0a5c2a" stop-opacity="0.2"/>
+      <stop offset="0%" stop-color="#0a5c2a" stop-opacity="0.06"/>
+      <stop offset="50%" stop-color="#16a34a" stop-opacity="0.03"/>
+      <stop offset="100%" stop-color="#0a5c2a" stop-opacity="0.06"/>
     </linearGradient>
   </defs>
 
