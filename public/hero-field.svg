@@ -41,8 +41,8 @@
     <!-- Punto penal izquierdo -->
     <circle cx="130" cy="200" r="3" fill="#22c55e" fill-opacity="0.4"/>
 
-    <!-- Arco penal izquierdo: centrado en (130,200), radio 60, curva hacia la derecha -->
-    <path d="M 180 167 A 60 60 0 0 1 180 233" stroke="#16a34a" stroke-opacity="0.4" stroke-width="1.2" fill="none"/>
+    <!-- Arco penal izquierdo: centrado en (130,200), radio 100, intersecta área grande en (180,~113) y (180,~287), curva hacia la derecha -->
+    <path d="M 180 113 A 100 100 0 0 1 180 287" stroke="#16a34a" stroke-opacity="0.4" stroke-width="1.2" fill="none"/>
 
     <!-- Área grande derecha -->
     <rect x="620" y="100" width="140" height="200" stroke="#16a34a" stroke-opacity="0.4" stroke-width="1.2"/>
@@ -53,8 +53,8 @@
     <!-- Punto penal derecho -->
     <circle cx="670" cy="200" r="3" fill="#22c55e" fill-opacity="0.4"/>
 
-    <!-- Arco penal derecho: centrado en (670,200), radio 60, curva hacia la izquierda -->
-    <path d="M 620 167 A 60 60 0 0 0 620 233" stroke="#16a34a" stroke-opacity="0.4" stroke-width="1.2" fill="none"/>
+    <!-- Arco penal derecho: centrado en (670,200), radio 100, intersecta área grande en (620,~113) y (620,~287), curva hacia la izquierda -->
+    <path d="M 620 113 A 100 100 0 0 0 620 287" stroke="#16a34a" stroke-opacity="0.4" stroke-width="1.2" fill="none"/>
 
     <!-- Esquinas -->
     <path d="M 40 20 Q 40 45 65 45" stroke="#22c55e" stroke-opacity="0.35" stroke-width="1" fill="none"/>
