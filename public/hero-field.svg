@@ -54,10 +54,10 @@
     <!-- Arco penal derecho -->
     <path d="M 620 144 A 75 75 0 0 0 620 256" stroke="#16a34a" stroke-opacity="0.30" stroke-width="1.2" fill="none"/>
 
-    <!-- Esquinas -->
-    <path d="M 40 20 Q 40 45 65 45" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
-    <path d="M 760 20 Q 760 45 735 45" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
-    <path d="M 40 380 Q 40 355 65 355" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
-    <path d="M 760 380 Q 760 355 735 355" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
+    <!-- Esquinas: arcos de cuarto de círculo con centro en cada banderín -->
+    <path d="M 40 45 A 25 25 0 0 1 65 20" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
+    <path d="M 760 45 A 25 25 0 0 1 735 20" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
+    <path d="M 65 380 A 25 25 0 0 0 40 355" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
+    <path d="M 735 380 A 25 25 0 0 1 760 355" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
   </g>
 </svg>
