@@ -6,11 +6,7 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
 	integrations: [
 		starlight({
-			title: 'SFS',
-			logo: {
-				src: './src/assets/logo.svg',
-				replacesTitle: true,
-			},
+			title: '⚽ SFS',
 			social: [],
 			customCss: ['./src/styles/custom.css'],
 			defaultLocale: 'root',
