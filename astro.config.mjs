@@ -7,6 +7,10 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'SFS',
+			logo: {
+				src: './src/assets/logo.svg',
+				replacesTitle: true,
+			},
 			social: [],
 			customCss: ['./src/styles/custom.css'],
 			defaultLocale: 'root',
