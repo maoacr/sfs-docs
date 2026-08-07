@@ -1,0 +1,574 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   SFS Design System — Starlight Theme
+   Fútbol. Elegancia. Minimalismo. Futuro.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Design Tokens ────────────────────────────────────────────────────── */
+
+:root {
+  /* Greens — el campo de fútbol como inspiración */
+  --sfs-field:        #0a5c2a;
+  --sfs-field-light:  #0d7234;
+  --sfs-grass:        #16a34a;
+  --sfs-grass-light:  #22c55e;
+  --sfs-grass-glow:   #4ade80;  /* resplandor suave para efectos */
+
+  /* Gradients — la cancha bajo las luces */
+  --sfs-gradient-field: linear-gradient(135deg, #0a5c2a 0%, #0d7234 50%, #0a5c2a 100%);
+  --sfs-gradient-grass: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+  --sfs-gradient-hero:  linear-gradient(180deg, #0a5c2a08 0%, #0a0a0a 60%);
+  --sfs-gradient-card:  linear-gradient(135deg, #141414 0%, #1a1a1a 100%);
+  --sfs-gradient-glow:  radial-gradient(ellipse at center, rgba(22,163,74,0.12) 0%, transparent 70%);
+
+  /* Backgrounds */
+  --sfs-bg:           #0a0a0a;
+  --sfs-surface:      #141414;
+  --sfs-surface-hover:#1c1c1c;
+  --sfs-elevated:     #1a1a1a;
+
+  /* Text */
+  --sfs-text:         #ededed;
+  --sfs-text-muted:   #a1a1aa;
+  --sfs-text-dim:     #71717a;
+
+  /* Borders */
+  --sfs-border:       #262626;
+  --sfs-border-hover: #404040;
+  --sfs-border-glow:  rgba(22, 163, 74, 0.15);
+
+  /* Shadows — elegantes, con tinte verde, nunca negro puro */
+  --sfs-shadow-sm:    0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(10, 92, 42, 0.06);
+  --sfs-shadow-md:    0 4px 16px rgba(0,0,0,0.35), 0 2px 8px rgba(10, 92, 42, 0.05);
+  --sfs-shadow-lg:    0 12px 40px rgba(0,0,0,0.45), 0 4px 16px rgba(10, 92, 42, 0.06);
+  --sfs-shadow-glow:  0 0 30px rgba(22, 163, 74, 0.1), 0 4px 20px rgba(0,0,0,0.4);
+  --sfs-shadow-card:  0 1px 2px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.03) inset;
+
+  /* Border radius — orgánico, nunca cuadrado */
+  --sfs-radius-sm:  6px;
+  --sfs-radius-md:  10px;
+  --sfs-radius-lg:  14px;
+  --sfs-radius-xl:  18px;
+  --sfs-radius-2xl: 24px;
+
+  /* States */
+  --sfs-error:       #ef4444;
+  --sfs-error-bg:    #1f0f0f;
+  --sfs-warning:     #f59e0b;
+  --sfs-warning-bg:  #1f1806;
+  --sfs-success:     #22c55e;
+  --sfs-success-bg:  #061a0e;
+  --sfs-info:        #3b82f6;
+  --sfs-info-bg:     #0a1628;
+}
+
+/* ─── Starlight theme override ─────────────────────────────────────────── */
+
+:root,
+:root[data-theme="light"],
+:root[data-theme="dark"] {
+  --sl-color-accent-low:     var(--sfs-field);
+  --sl-color-accent:         var(--sfs-grass);
+  --sl-color-accent-high:    var(--sfs-grass-light);
+
+  --sl-color-bg:             var(--sfs-bg);
+  --sl-color-bg-nav:         var(--sfs-surface);
+  --sl-color-bg-sidebar:     var(--sfs-bg);
+  --sl-color-bg-inline-code: var(--sfs-surface);
+  --sl-color-bg-accent:      var(--sfs-field);
+  --sl-color-bg-badge:       var(--sfs-surface);
+
+  --sl-color-text:           var(--sfs-text);
+  --sl-color-text-accent:    var(--sfs-grass-light);
+  --sl-color-text-invert:    var(--sfs-bg);
+
+  --sl-color-hairline:       var(--sfs-border);
+  --sl-color-hairline-light: var(--sfs-border);
+  --sl-color-hairline-shade: var(--sfs-border-hover);
+
+  --sl-color-gray-1:  var(--sfs-text);
+  --sl-color-gray-2:  var(--sfs-text-muted);
+  --sl-color-gray-3:  var(--sfs-text-dim);
+  --sl-color-gray-4:  var(--sfs-border-hover);
+  --sl-color-gray-5:  var(--sfs-border);
+  --sl-color-gray-6:  var(--sfs-surface-hover);
+  --sl-color-gray-7:  var(--sfs-surface);
+
+  --sl-color-black:   var(--sfs-bg);
+  --sl-color-white:   var(--sfs-text);
+
+  --sl-shadow-lg: var(--sfs-shadow-lg);
+  --sl-shadow-md: var(--sfs-shadow-md);
+  --sl-shadow-sm: var(--sfs-shadow-sm);
+}
+
+/* ─── Typography ───────────────────────────────────────────────────────── */
+
+:root {
+  --sl-font: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --sl-font-mono: 'Geist Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  --sl-text-xs:  0.75rem;
+  --sl-text-sm:  0.875rem;
+  --sl-text-base: 1rem;
+  --sl-text-lg:  1.125rem;
+  --sl-text-xl:  1.25rem;
+  --sl-text-2xl: 1.5rem;
+  --sl-text-3xl: 1.875rem;
+  --sl-text-4xl: 2.25rem;
+  --sl-text-5xl: 3rem;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--sl-font);
+}
+
+/* ─── Football field texture (background) ──────────────────────────────── */
+
+/* Subtle field lines in the main content bg — only on larger screens */
+@media (min-width: 768px) {
+  .main-frame {
+    background-image: url('/field-pattern.svg');
+    background-repeat: repeat;
+    background-size: 400px 400px;
+    background-position: center;
+    background-attachment: fixed;
+  }
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--sfs-bg); }
+::-webkit-scrollbar-thumb {
+  background: var(--sfs-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sfs-grass);
+}
+
+/* ─── Selection ────────────────────────────────────────────────────────── */
+
+::selection {
+  background: var(--sfs-grass);
+  color: #fff;
+}
+
+/* ─── Focus ring ───────────────────────────────────────────────────────── */
+
+*:focus-visible {
+  outline: 2px solid var(--sfs-grass-light);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Links — elegantes con underline animado ──────────────────────────── */
+
+a:not(.starlight-aside a, nav a, .card a, .sl-link-button) {
+  color: var(--sfs-grass-light);
+  text-decoration: none;
+  background: linear-gradient(to right, var(--sfs-grass), var(--sfs-grass-light));
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 200ms ease, color 200ms ease;
+  padding-bottom: 1px;
+}
+a:not(.starlight-aside a, nav a, .card a, .sl-link-button):hover {
+  background-size: 100% 1px;
+}
+
+/* ─── Sidebar — flotante, suave ────────────────────────────────────────── */
+
+.sidebar-content a[aria-current="page"] {
+  color: var(--sfs-grass-light) !important;
+  background: linear-gradient(90deg, rgba(22,163,74,0.1) 0%, transparent 100%) !important;
+  border-left: 2px solid var(--sfs-grass) !important;
+  border-radius: 0 var(--sfs-radius-sm) var(--sfs-radius-sm) 0 !important;
+}
+
+.sidebar-content a {
+  transition: background 150ms ease, color 150ms ease, border-radius 150ms ease;
+  border-radius: var(--sfs-radius-sm) !important;
+  margin: 1px 4px !important;
+}
+
+.sidebar-content a:hover {
+  background: var(--sfs-surface-hover) !important;
+}
+
+.sidebar-content summary,
+.sidebar-content .group-label {
+  color: var(--sfs-text-muted) !important;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+}
+
+/* ─── Header — glassmorphism sutil ─────────────────────────────────────── */
+
+.header {
+  background: rgba(20, 20, 20, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-bottom: 1px solid var(--sfs-border) !important;
+}
+
+starlight-search button {
+  background: var(--sfs-bg) !important;
+  border-color: var(--sfs-border) !important;
+  color: var(--sfs-text-muted) !important;
+  border-radius: var(--sfs-radius-md) !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+starlight-search button:hover {
+  border-color: var(--sfs-border-glow) !important;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.08);
+  color: var(--sfs-text) !important;
+}
+
+/* ─── Code ─────────────────────────────────────────────────────────────── */
+
+:not(pre) > code {
+  background: var(--sfs-surface) !important;
+  color: var(--sfs-grass-light) !important;
+  border: 1px solid var(--sfs-border) !important;
+  border-radius: var(--sfs-radius-sm) !important;
+  padding: 0.15em 0.4em !important;
+  font-size: 0.875em !important;
+}
+
+pre, .expressive-code {
+  background: var(--sfs-gradient-card) !important;
+  border: 1px solid var(--sfs-border) !important;
+  border-radius: var(--sfs-radius-lg) !important;
+  box-shadow: var(--sfs-shadow-card) !important;
+}
+
+.expressive-code .frame { background: transparent !important; }
+.expressive-code .title {
+  border-bottom: 1px solid var(--sfs-border) !important;
+  color: var(--sfs-text-muted) !important;
+}
+.expressive-code .ec-line .line-number { color: var(--sfs-text-dim) !important; }
+
+/* ─── Tables — con gradiente sutil en header ───────────────────────────── */
+
+table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  border-radius: var(--sfs-radius-lg) !important;
+  overflow: hidden;
+  border: 1px solid var(--sfs-border);
+  width: 100%;
+  box-shadow: var(--sfs-shadow-sm);
+}
+
+th {
+  background: linear-gradient(180deg, #1a1a1a 0%, var(--sfs-surface) 100%) !important;
+  color: var(--sfs-text-muted) !important;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.8rem 1rem !important;
+  border-bottom: 1px solid var(--sfs-border) !important;
+  text-align: left;
+}
+
+td {
+  padding: 0.65rem 1rem !important;
+  border-bottom: 1px solid var(--sfs-border) !important;
+  background: transparent;
+}
+
+tr:last-child td { border-bottom: none !important; }
+tr:hover td { background: rgba(22, 163, 74, 0.02); }
+
+/* ─── Cards — el elemento estrella del DS ──────────────────────────────── */
+
+.card, .sl-card {
+  background: var(--sfs-gradient-card) !important;
+  border: 1px solid var(--sfs-border) !important;
+  border-radius: var(--sfs-radius-xl) !important;
+  box-shadow: var(--sfs-shadow-card) !important;
+  transition: transform 200ms ease, border-color 200ms ease, box-shadow 250ms ease;
+}
+
+.card:hover, .sl-card:hover {
+  border-color: var(--sfs-border-glow) !important;
+  box-shadow: var(--sfs-shadow-glow) !important;
+  transform: translateY(-2px);
+}
+
+.card .icon, .sl-card .icon {
+  color: var(--sfs-grass) !important;
+  filter: drop-shadow(0 2px 4px rgba(22, 163, 74, 0.2));
+}
+
+/* ─── Callouts / Asides ────────────────────────────────────────────────── */
+
+.starlight-aside {
+  border-radius: var(--sfs-radius-lg) !important;
+  border: 1px solid var(--sfs-border) !important;
+  background: var(--sfs-surface) !important;
+  box-shadow: var(--sfs-shadow-sm);
+}
+
+.starlight-aside--note {
+  border-left: 3px solid var(--sfs-info) !important;
+  background: var(--sfs-info-bg) !important;
+}
+
+.starlight-aside--tip {
+  border-left: 3px solid var(--sfs-grass) !important;
+  background: var(--sfs-success-bg) !important;
+}
+
+.starlight-aside--caution,
+.starlight-aside--danger {
+  border-left: 3px solid var(--sfs-error) !important;
+  background: var(--sfs-error-bg) !important;
+}
+
+.starlight-aside .starlight-aside__title {
+  color: var(--sfs-text) !important;
+  font-weight: 600;
+}
+.starlight-aside .starlight-aside__icon { opacity: 0.8; }
+
+/* ─── Tabs ─────────────────────────────────────────────────────────────── */
+
+starlight-tabs { border-bottom-color: var(--sfs-border) !important; }
+starlight-tabs [role="tab"] {
+  color: var(--sfs-text-muted) !important;
+  transition: color 150ms ease;
+  border-radius: var(--sfs-radius-sm) var(--sfs-radius-sm) 0 0 !important;
+}
+starlight-tabs [role="tab"][aria-selected="true"] {
+  color: var(--sfs-grass-light) !important;
+  border-bottom: 2px solid var(--sfs-grass) !important;
+  background: rgba(22, 163, 74, 0.04);
+}
+
+/* ─── Badges — con gradiente ───────────────────────────────────────────── */
+
+.sl-badge {
+  background: var(--sfs-gradient-field) !important;
+  color: var(--sfs-grass-light) !important;
+  border: 1px solid rgba(22, 163, 74, 0.2);
+  border-radius: var(--sfs-radius-sm) !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+/* ─── Pagination ───────────────────────────────────────────────────────── */
+
+.pagination-links a {
+  border-color: var(--sfs-border) !important;
+  background: var(--sfs-gradient-card) !important;
+  border-radius: var(--sfs-radius-lg) !important;
+  box-shadow: var(--sfs-shadow-sm);
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 200ms ease;
+}
+.pagination-links a:hover {
+  border-color: var(--sfs-border-glow) !important;
+  box-shadow: var(--sfs-shadow-md);
+  transform: translateY(-1px);
+}
+.pagination-links .link-title { color: var(--sfs-text) !important; }
+.pagination-links .link-hint { color: var(--sfs-text-dim) !important; }
+
+/* ─── Hero (splash) — con gradiente de cancha ──────────────────────────── */
+
+.hero {
+  text-align: center;
+  padding: 4rem 0;
+  position: relative;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 400px;
+  background: var(--sfs-gradient-glow);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.hero .tagline {
+  font-size: var(--sl-text-4xl);
+  font-weight: 700;
+  color: var(--sfs-text);
+  line-height: 1.15;
+  max-width: 700px;
+  margin: 0 auto 2rem;
+  letter-spacing: -0.03em;
+}
+
+/* Hero actions — buttons con gradiente */
+.sl-link-button.primary {
+  background: var(--sfs-gradient-grass) !important;
+  border: none !important;
+  color: #fff !important;
+  border-radius: var(--sfs-radius-md) !important;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(22, 163, 74, 0.25);
+  transition: transform 150ms ease, box-shadow 200ms ease, filter 200ms ease;
+}
+.sl-link-button.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(22, 163, 74, 0.35);
+  filter: brightness(1.1);
+}
+
+.sl-link-button:not(.primary) {
+  border: 1px solid var(--sfs-border) !important;
+  color: var(--sfs-text) !important;
+  background: var(--sfs-surface) !important;
+  border-radius: var(--sfs-radius-md) !important;
+  font-weight: 600;
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 200ms ease;
+}
+.sl-link-button:not(.primary):hover {
+  border-color: var(--sfs-border-glow) !important;
+  box-shadow: var(--sfs-shadow-md);
+  transform: translateY(-1px);
+}
+
+/* ─── Blockquotes ──────────────────────────────────────────────────────── */
+
+blockquote {
+  border-left: 3px solid var(--sfs-grass) !important;
+  background: var(--sfs-gradient-card) !important;
+  border-radius: 0 var(--sfs-radius-lg) var(--sfs-radius-lg) 0 !important;
+  padding: 1.25rem 1.5rem !important;
+  margin: 1.5rem 0 !important;
+  color: var(--sfs-text-muted) !important;
+  box-shadow: var(--sfs-shadow-sm);
+}
+
+/* ─── Horizontal rules — con gradiente ─────────────────────────────────── */
+
+hr {
+  border: none !important;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--sfs-border), transparent);
+  margin: 2.5rem 0 !important;
+}
+
+/* ─── Headings ─────────────────────────────────────────────────────────── */
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--sfs-text);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+h1 {
+  font-size: var(--sl-text-3xl);
+  margin-top: 0;
+  background: linear-gradient(135deg, var(--sfs-text) 0%, var(--sfs-grass-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+h2 { font-size: var(--sl-text-2xl); margin-top: 2.5rem; border-bottom: none; }
+h3 { font-size: var(--sl-text-xl); margin-top: 2rem; }
+h4 { font-size: var(--sl-text-lg); margin-top: 1.5rem; }
+
+/* ─── Mobile menu ──────────────────────────────────────────────────────── */
+
+mobile-starlight-menu { --sl-color-bg: var(--sfs-bg); }
+
+/* ─── Back to top ──────────────────────────────────────────────────────── */
+
+starlight-back-to-top a {
+  background: var(--sfs-surface) !important;
+  border: 1px solid var(--sfs-border) !important;
+  color: var(--sfs-text-muted) !important;
+  border-radius: var(--sfs-radius-md) !important;
+  box-shadow: var(--sfs-shadow-md);
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+starlight-back-to-top a:hover {
+  border-color: var(--sfs-border-glow) !important;
+  transform: translateY(-2px);
+}
+
+/* ─── Content layout ───────────────────────────────────────────────────── */
+
+.sl-container { max-width: 80rem; }
+.content-panel + .content-panel { border-top-color: var(--sfs-border) !important; }
+
+/* ─── Table of contents (right sidebar) ────────────────────────────────── */
+
+#starlight__on-this-page {
+  border-left: 1px solid var(--sfs-border) !important;
+}
+
+#starlight__on-this-page a {
+  color: var(--sfs-text-muted) !important;
+  transition: color 150ms ease;
+}
+#starlight__on-this-page a:hover {
+  color: var(--sfs-grass-light) !important;
+}
+
+/* ─── File tree ────────────────────────────────────────────────────────── */
+
+starlight-file-tree {
+  background: var(--sfs-surface) !important;
+  border: 1px solid var(--sfs-border) !important;
+  border-radius: var(--sfs-radius-lg) !important;
+}
+
+/* ─── Smooth transitions ───────────────────────────────────────────────── */
+
+.sl-container, .sidebar-content, .header, .card, .sl-card,
+starlight-search button, .pagination-links a, blockquote {
+  transition: background-color 200ms ease, border-color 200ms ease, box-shadow 250ms ease, transform 200ms ease;
+}
+
+/* ─── Glassmorphism utility ────────────────────────────────────────────── */
+
+.glass {
+  background: rgba(20, 20, 20, 0.7) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid var(--sfs-border) !important;
+}
+
+/* ─── Responsive ───────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .hero { padding: 2.5rem 0; }
+  .hero .tagline {
+    font-size: var(--sl-text-2xl);
+    padding: 0 1rem;
+  }
+
+  /* Touch-friendly: bigger tap targets on mobile */
+  .sidebar-content a {
+    padding: 0.65rem 0.75rem !important;
+    min-height: 44px;
+    display: flex !important;
+    align-items: center;
+  }
+}

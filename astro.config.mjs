@@ -8,6 +8,8 @@ export default defineConfig({
 		starlight({
 			title: 'SFS',
 			social: [],
+			customCss: ['./src/styles/custom.css'],
+			defaultLocale: 'root',
 			sidebar: [
 				{
 					label: 'Visión',
@@ -36,6 +38,13 @@ export default defineConfig({
 					items: [
 						{ label: 'Email (Resend)', slug: 'guides/email' },
 						{ label: 'Zonas Horarias', slug: 'guides/timezone' },
+					],
+				},
+				{
+					label: 'Diseño',
+					items: [
+						{ label: 'Branding', slug: 'diseno/branding' },
+						{ label: 'Design System', slug: 'diseno/design-system' },
 					],
 				},
 				{

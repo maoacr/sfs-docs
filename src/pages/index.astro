@@ -1,0 +1,366 @@
+---
+import type { Props } from '@astrojs/starlight/props';
+---
+
+<!DOCTYPE html>
+<html lang="es" style="color-scheme:dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SFS — Gestión de canchas de fútbol</title>
+  <meta name="description" content="SaaS multi-tenant para gestión y reservas de canchas de fútbol." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ═════════════ SFS Design System — Homepage ═════════════ */
+    :root {
+      --field: #0a5c2a; --field-light: #0d7234;
+      --grass: #16a34a; --grass-light: #22c55e; --grass-glow: #4ade80;
+      --bg: #0a0a0a; --surface: #141414; --surface-hover: #1c1c1c; --elevated: #1a1a1a;
+      --text: #ededed; --text-muted: #a1a1aa; --text-dim: #71717a;
+      --border: #262626; --border-hover: #404040; --border-glow: rgba(22,163,74,0.2);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(10,92,42,0.06);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.35), 0 2px 8px rgba(10,92,42,0.05);
+      --shadow-lg: 0 12px 40px rgba(0,0,0,0.45), 0 4px 16px rgba(10,92,42,0.06);
+      --shadow-glow: 0 0 30px rgba(22,163,74,0.12), 0 8px 32px rgba(0,0,0,0.5);
+      --shadow-card: 0 1px 2px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.03);
+      --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 18px; --radius-2xl: 24px;
+      --font: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'Geist Mono', 'JetBrains Mono', monospace;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.6;overflow-x:hidden}
+    ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+    ::-webkit-scrollbar-thumb:hover{background:var(--grass)}
+    ::selection{background:var(--grass);color:#fff}
+    *:focus-visible{outline:2px solid var(--grass-light);outline-offset:2px;border-radius:4px}
+    a{color:var(--grass-light);text-decoration:none}
+
+    /* ─── Navigation ─── */
+    .nav{position:fixed;top:0;left:0;right:0;z-index:50;background:rgba(10,10,10,0.8);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+    .nav-inner{max-width:1200px;margin:0 auto;padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between}
+    .nav-logo{display:flex;align-items:center;gap:0.5rem;font-weight:700;font-size:1.1rem;letter-spacing:-0.02em;color:var(--text)}
+    .nav-logo svg{width:24px;height:24px}
+    .nav-links{display:flex;align-items:center;gap:1.5rem}
+    .nav-links a{font-size:0.85rem;color:var(--text-muted);transition:color 150ms;font-weight:500}
+    .nav-links a:hover{color:var(--grass-light)}
+    .nav-cta{background:linear-gradient(135deg,var(--grass),var(--grass-light));color:#fff;padding:0.45rem 1rem;border-radius:var(--radius-md);font-size:0.8rem;font-weight:600;transition:transform 150ms,box-shadow 200ms,filter 200ms;box-shadow:0 2px 8px rgba(22,163,74,0.25)}
+    .nav-cta:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(22,163,74,0.35);filter:brightness(1.1);color:#fff}
+
+    /* ─── Hero ─── */
+    .hero{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:5rem 1.5rem 4rem;overflow:hidden}
+    .hero-bg{position:absolute;inset:0;pointer-events:none}
+    .hero-bg img{width:100%;height:100%;object-fit:cover;opacity:0.25}
+    .hero-glow{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:800px;height:800px;background:radial-gradient(circle,rgba(22,163,74,0.1) 0%,transparent 70%);pointer-events:none}
+    .hero-content{position:relative;z-index:1;text-align:center;max-width:800px}
+    .hero-badge{display:inline-block;background:linear-gradient(135deg,rgba(10,92,42,0.4),rgba(13,114,52,0.4));border:1px solid rgba(22,163,74,0.25);color:var(--grass-glow);font-size:0.72rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:0.35rem 1rem;border-radius:var(--radius-sm);margin-bottom:1.5rem}
+    .hero h1{font-size:clamp(2.5rem,6vw,4.5rem);font-weight:800;line-height:1.05;letter-spacing:-0.04em;margin-bottom:1.25rem;background:linear-gradient(135deg,var(--text) 20%,var(--grass-glow) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .hero p{font-size:clamp(1rem,2vw,1.2rem);color:var(--text-muted);max-width:550px;margin:0 auto 2rem;line-height:1.7}
+    .hero-actions{display:flex;gap:0.75rem;flex-wrap:wrap;justify-content:center}
+    .btn{display:inline-flex;align-items:center;gap:0.4rem;padding:0.75rem 1.5rem;border-radius:var(--radius-md);font-weight:600;font-size:0.9rem;transition:transform 150ms,box-shadow 200ms,filter 200ms;cursor:pointer;border:none;text-decoration:none}
+    .btn-primary{background:linear-gradient(135deg,var(--grass),var(--grass-light));color:#fff;box-shadow:0 4px 16px rgba(22,163,74,0.3)}
+    .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(22,163,74,0.4);filter:brightness(1.1);color:#fff}
+    .btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+    .btn-secondary:hover{transform:translateY(-2px);border-color:var(--border-glow);box-shadow:var(--shadow-md);color:var(--text)}
+    .hero-scroll{position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);animation:bounce 2s infinite}
+    .hero-scroll svg{width:24px;height:24px;opacity:0.3}
+
+    /* ─── Sections ─── */
+    section{padding:5rem 1.5rem}
+    .section-inner{max-width:1100px;margin:0 auto}
+    .section-label{display:inline-block;background:linear-gradient(135deg,rgba(10,92,42,0.3),rgba(13,114,52,0.3));border:1px solid rgba(22,163,74,0.2);color:var(--grass-glow);font-size:0.7rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:0.3rem 0.8rem;border-radius:var(--radius-sm);margin-bottom:1rem}
+    .section-title{font-size:clamp(1.6rem,3vw,2.2rem);font-weight:700;letter-spacing:-0.03em;line-height:1.2;margin-bottom:0.75rem}
+    .section-sub{color:var(--text-muted);font-size:1rem;max-width:550px;line-height:1.65;margin-bottom:3rem}
+
+    /* ─── Roles Grid ─── */
+    .roles-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.25rem}
+    .role-card{position:relative;background:linear-gradient(135deg,var(--surface),var(--elevated));border:1px solid var(--border);border-radius:var(--radius-xl);padding:2rem;box-shadow:var(--shadow-card);transition:transform 250ms ease,box-shadow 250ms ease,border-color 250ms ease;overflow:hidden}
+    .role-card:hover{transform:translateY(-4px);border-color:var(--border-glow);box-shadow:var(--shadow-glow)}
+    .role-glow{position:absolute;width:150px;height:150px;border-radius:50%;pointer-events:none}
+    .role-glow-right{top:-50px;right:-50px;background:radial-gradient(circle,rgba(22,163,74,0.1),transparent 70%)}
+    .role-glow-left{bottom:-50px;left:-50px;background:radial-gradient(circle,rgba(59,130,246,0.08),transparent 70%)}
+    .role-icon{font-size:2.2rem;margin-bottom:1rem;position:relative}
+    .role-card h3{font-size:1.25rem;font-weight:700;margin-bottom:0.5rem;position:relative}
+    .role-card p{color:var(--text-muted);font-size:0.9rem;line-height:1.65;margin-bottom:1.25rem;position:relative}
+    .role-tags{display:flex;gap:0.4rem;flex-wrap:wrap;position:relative}
+    .tag{font-size:0.68rem;padding:0.22rem 0.55rem;border-radius:4px;font-weight:500}
+    .tag-green{background:rgba(22,163,74,0.08);color:var(--grass-glow)}
+    .tag-blue{background:rgba(59,130,246,0.08);color:#93c5fd}
+
+    /* ─── Docs Grid ─── */
+    .docs-grid,.design-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem}
+    .doc-card{display:flex;flex-direction:column;gap:0.5rem;background:linear-gradient(135deg,var(--surface),var(--elevated));border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem;box-shadow:var(--shadow-card);transition:transform 200ms ease,box-shadow 200ms ease,border-color 200ms ease;text-decoration:none}
+    .doc-card:hover{transform:translateY(-3px);border-color:var(--border-glow);box-shadow:var(--shadow-glow)}
+    .doc-card .icon{font-size:1.3rem;color:var(--grass)}
+    .doc-card h4{font-size:0.95rem;font-weight:600;color:var(--text)}
+    .doc-card span{font-size:0.78rem;color:var(--text-dim);line-height:1.5}
+
+    /* ─── Stack Grid ─── */
+    .stack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0.75rem}
+    .stack-item{background:linear-gradient(135deg,var(--surface),var(--elevated));border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1rem;text-align:center;box-shadow:var(--shadow-card);transition:transform 200ms ease,border-color 200ms ease}
+    .stack-item:hover{transform:translateY(-2px);border-color:var(--border-glow)}
+    .stack-item .name{font-weight:700;font-size:0.85rem;margin-bottom:0.15rem}
+    .stack-item .role{font-size:0.7rem;color:var(--text-dim)}
+
+    /* ─── Roadmap ─── */
+    .roadmap{display:flex;justify-content:center;gap:1.5rem;flex-wrap:wrap;position:relative}
+    .roadmap::before{content:'';position:absolute;top:12px;left:10%;right:10%;height:1px;background:linear-gradient(90deg,transparent,var(--field),var(--grass),var(--field),transparent);opacity:0.3;z-index:0}
+    .road-step{flex:1;min-width:100px;max-width:160px;text-align:center;position:relative;z-index:1}
+    .road-dot{width:10px;height:10px;border-radius:50%;margin:0 auto 0.75rem;position:relative;z-index:1}
+    .road-dot.active{background:var(--grass-light);box-shadow:0 0 16px rgba(34,197,94,0.5)}
+    .road-dot.future{background:var(--border-hover)}
+    .road-step h5{font-size:0.82rem;font-weight:600;margin-bottom:0.15rem}
+    .road-step .future h5{color:var(--text-dim)}
+    .road-step small{font-size:0.68rem;color:var(--text-dim)}
+
+    /* ─── Footer ─── */
+    footer{padding:2.5rem 1.5rem;border-top:1px solid var(--border);text-align:center}
+    .footer-credit{font-size:0.78rem;color:var(--text-dim)}
+    .footer-credit a{color:var(--grass-light);font-weight:500}
+
+    /* ─── Dividers ─── */
+    .divider{display:flex;align-items:center;gap:1rem;max-width:1100px;margin:0 auto;padding:0 1.5rem;opacity:0.3}
+    .divider-line{flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--border))}
+    .divider-line:last-child{background:linear-gradient(90deg,var(--border),transparent)}
+    .divider svg{width:16px;height:16px;flex-shrink:0;opacity:0.5}
+
+    /* ─── Animations ─── */
+    @keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+    .anim-fade{animation:fadeUp 0.7s ease-out both}
+    .anim-delay-1{animation-delay:0.1s}.anim-delay-2{animation-delay:0.2s}.anim-delay-3{animation-delay:0.3s}
+    @media (prefers-reduced-motion:reduce){.anim-fade{animation:none}.hero-scroll{display:none}}
+
+    /* ─── Responsive ─── */
+    @media (max-width:640px){
+      section{padding:3.5rem 1rem}
+      .hero{padding:4rem 1rem 3rem}
+      .nav-links a:not(.nav-cta){display:none}
+      .roles-grid{grid-template-columns:1fr}
+      .docs-grid,.design-grid{grid-template-columns:1fr}
+      .stack-grid{grid-template-columns:repeat(2,1fr)}
+      .roadmap::before{left:5%;right:5%}
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════ NAV ═══════════ -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">
+        <svg viewBox="0 0 128 128"><defs><linearGradient id="nl" x1="0" y1="0" x2="128" y2="128"><stop offset="0%" stop-color="#0a5c2a"/><stop offset="100%" stop-color="#16a34a"/></linearGradient></defs><path fill-rule="evenodd" d="M81 36 64 0 47 36l-1 2-9-10a6 6 0 0 0-9 9l10 10h-2L0 64l36 17h2L28 91a6 6 0 1 0 9 9l9-10 1 2 17 36 17-36v-2l9 10a6 6 0 1 0 9-9l-9-9 2-1 36-17-36-17-2-1 9-9a6 6 0 1 0-9-9l-9 10v-2Zm-17 2-2 5c-4 8-11 15-19 19l-5 2 5 2c8 4 15 11 19 19l2 5 2-5c4-8 11-15 19-19l5-2-5-2c-8-4-15-11-19-19l-2-5Z" clip-rule="evenodd" fill="url(#nl)"/><path d="M118 19a6 6 0 0 0-9-9l-3 3a6 6 0 1 0 9 9l3-3Zm-96 4c-2 2-6 2-9 0l-3-3a6 6 0 1 1 9-9l3 3c3 2 3 6 0 9Zm0 82c-2-2-6-2-9 0l-3 3a6 6 0 1 0 9 9l3-3c3-2 3-6 0-9Zm96 4a6 6 0 0 1-9 9l-3-3a6 6 0 1 1 9-9l3 3Z" fill="#22c55e"/></svg>
+        SFS
+      </a>
+      <div class="nav-links">
+        <a href="/vision/producto/">Visión</a>
+        <a href="/api/rest/">API</a>
+        <a href="/diseno/branding/">Diseño</a>
+        <a href="/vision/producto/" class="nav-cta">Documentación →</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══════════ HERO ═══════════ -->
+  <section class="hero">
+    <div class="hero-bg">
+      <img src="/hero-field.svg" alt="" aria-hidden="true" />
+    </div>
+    <div class="hero-glow"></div>
+    <div class="hero-content anim-fade">
+      <span class="hero-badge">Plataforma SaaS</span>
+      <h1>El fútbol merece mejor software.</h1>
+      <p>Gestión de canchas, reservas en tiempo real y pagos integrados. Todo en un solo lugar, diseñado para dueños y jugadores.</p>
+      <div class="hero-actions anim-fade anim-delay-1">
+        <a href="/vision/producto/" class="btn btn-primary">Explorar documentación →</a>
+        <a href="/diseno/branding/" class="btn btn-secondary">Diseño e Identidad</a>
+      </div>
+    </div>
+    <div class="hero-scroll">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"/></svg>
+    </div>
+  </section>
+
+  <!-- ═══════════ LA PLATAFORMA ═══════════ -->
+  <section>
+    <div class="section-inner">
+      <span class="section-label">La Plataforma</span>
+      <h2 class="section-title anim-fade">Dos roles. Una cancha.</h2>
+      <p class="section-sub anim-fade anim-delay-1">SFS conecta a dueños de canchas con jugadores. Sin WhatsApp, sin llamadas, sin fricción.</p>
+      <div class="roles-grid">
+        <a href="/vision/producto/" class="role-card anim-fade anim-delay-2" style="text-decoration:none;color:inherit;">
+          <div class="role-glow role-glow-right"></div>
+          <div class="role-icon">⚽</div>
+          <h3>Dueño de cancha</h3>
+          <p>Administrá tus complejos, configurá precios dinámicos, gestioná reservas y conocé a tus clientes desde un solo panel.</p>
+          <div class="role-tags">
+            <span class="tag tag-green">CRUD de canchas</span>
+            <span class="tag tag-green">Precios dinámicos</span>
+            <span class="tag tag-green">Reportes</span>
+            <span class="tag tag-green">Gestión de clientes</span>
+          </div>
+        </a>
+        <a href="/vision/producto/" class="role-card anim-fade anim-delay-3" style="text-decoration:none;color:inherit;">
+          <div class="role-glow role-glow-left"></div>
+          <div class="role-icon">🔥</div>
+          <h3>Jugador</h3>
+          <p>Descubrí canchas cerca tuyo, reservá en segundos, pagá desde el celular. Llegá, jugá, repetí.</p>
+          <div class="role-tags">
+            <span class="tag tag-blue">Búsqueda por ubicación</span>
+            <span class="tag tag-blue">Reserva express</span>
+            <span class="tag tag-blue">Pago integrado</span>
+            <span class="tag tag-blue">Historial</span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ DIVIDER ═══════════ -->
+  <div class="divider">
+    <div class="divider-line"></div>
+    <svg viewBox="0 0 128 128"><path fill-rule="evenodd" d="M81 36 64 0 47 36l-1 2-9-10a6 6 0 0 0-9 9l10 10h-2L0 64l36 17h2L28 91a6 6 0 1 0 9 9l9-10 1 2 17 36 17-36v-2l9 10a6 6 0 1 0 9-9l-9-9 2-1 36-17-36-17-2-1 9-9a6 6 0 1 0-9-9l-9 10v-2Zm-17 2-2 5c-4 8-11 15-19 19l-5 2 5 2c8 4 15 11 19 19l2 5 2-5c4-8 11-15 19-19l5-2-5-2c-8-4-15-11-19-19l-2-5Z" clip-rule="evenodd" fill="#16a34a"/></svg>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- ═══════════ DOCUMENTACIÓN ═══════════ -->
+  <section>
+    <div class="section-inner">
+      <span class="section-label">Documentación</span>
+      <h2 class="section-title anim-fade">Todo lo que necesitás para construir.</h2>
+      <p class="section-sub anim-fade anim-delay-1">Desde la visión del producto hasta los endpoints de la API. Documentación viva, sincronizada con el código.</p>
+      <div class="docs-grid">
+        <a href="/vision/producto/" class="doc-card anim-fade anim-delay-1">
+          <span class="icon">★</span>
+          <h4>Visión del Producto</h4>
+          <span>El problema, la solución, los roles y la arquitectura general del sistema.</span>
+        </a>
+        <a href="/vision/mvp/alcance/" class="doc-card anim-fade anim-delay-1">
+          <span class="icon">🚀</span>
+          <h4>MVP — Alcance</h4>
+          <span>Qué entra y qué queda fuera. Features, pagos y modelo de datos inicial.</span>
+        </a>
+        <a href="/vision/data-model/" class="doc-card anim-fade anim-delay-2">
+          <span class="icon">🗄️</span>
+          <h4>Modelo de Datos</h4>
+          <span>Entidades, relaciones, multi-tenancy y convenciones de base de datos.</span>
+        </a>
+        <a href="/vision/flujo-reservas/" class="doc-card anim-fade anim-delay-2">
+          <span class="icon">⏱️</span>
+          <h4>Flujo de Reservas</h4>
+          <span>Ciclo de vida: creación, bloqueo TTL, confirmación, pago y liberación.</span>
+        </a>
+        <a href="/api/rest/" class="doc-card anim-fade anim-delay-3">
+          <span class="icon">⌨️</span>
+          <h4>API REST</h4>
+          <span>Endpoints documentados para disponibilidad, reservas, canchas y auth.</span>
+        </a>
+        <a href="/vision/offline-pwa/" class="doc-card anim-fade anim-delay-3">
+          <span class="icon">📡</span>
+          <h4>Modo Offline (PWA)</h4>
+          <span>Service worker, IndexedDB, sync engine. Reservá sin conexión.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ DISEÑO ═══════════ -->
+  <section>
+    <div class="section-inner">
+      <span class="section-label">Diseño</span>
+      <h2 class="section-title anim-fade">Una identidad con alma de fútbol.</h2>
+      <p class="section-sub anim-fade anim-delay-1">Gradientes que evocan la cancha, sombras con tinte verde, tipografía premium. Cada píxel tiene intención.</p>
+      <div class="design-grid">
+        <a href="/diseno/branding/" class="doc-card anim-fade anim-delay-2">
+          <span class="icon">🎨</span>
+          <h4>Branding & Identidad</h4>
+          <span>Paleta, tipografía Geist, gradientes, sombras y filosofía visual.</span>
+        </a>
+        <a href="/diseno/design-system/" class="doc-card anim-fade anim-delay-3">
+          <span class="icon">🧩</span>
+          <h4>Design System</h4>
+          <span>Tokens, componentes, mobile UX, gestos táctiles y jerarquía de imagen.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ DIVIDER ═══════════ -->
+  <div class="divider">
+    <div class="divider-line"></div>
+    <svg viewBox="0 0 128 128"><path fill-rule="evenodd" d="M81 36 64 0 47 36l-1 2-9-10a6 6 0 0 0-9 9l10 10h-2L0 64l36 17h2L28 91a6 6 0 1 0 9 9l9-10 1 2 17 36 17-36v-2l9 10a6 6 0 1 0 9-9l-9-9 2-1 36-17-36-17-2-1 9-9a6 6 0 1 0-9-9l-9 10v-2Zm-17 2-2 5c-4 8-11 15-19 19l-5 2 5 2c8 4 15 11 19 19l2 5 2-5c4-8 11-15 19-19l5-2-5-2c-8-4-15-11-19-19l-2-5Z" clip-rule="evenodd" fill="#16a34a"/></svg>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- ═══════════ STACK ═══════════ -->
+  <section>
+    <div class="section-inner">
+      <span class="section-label">Stack</span>
+      <h2 class="section-title anim-fade">Tecnología de primer nivel.</h2>
+      <p class="section-sub anim-fade anim-delay-1">Construido con herramientas modernas, pensadas para escalar desde el club de barrio hasta cadenas nacionales.</p>
+      <div class="stack-grid">
+        <div class="stack-item anim-fade anim-delay-1"><div class="name">Next.js</div><div class="role">Frontend</div></div>
+        <div class="stack-item anim-fade anim-delay-1"><div class="name">TypeScript</div><div class="role">Lenguaje</div></div>
+        <div class="stack-item anim-fade anim-delay-1"><div class="name">PostgreSQL</div><div class="role">Base de datos</div></div>
+        <div class="stack-item anim-fade anim-delay-2"><div class="name">Prisma</div><div class="role">ORM</div></div>
+        <div class="stack-item anim-fade anim-delay-2"><div class="name">Tailwind</div><div class="role">CSS</div></div>
+        <div class="stack-item anim-fade anim-delay-2"><div class="name">Astro</div><div class="role">Documentación</div></div>
+        <div class="stack-item anim-fade anim-delay-3"><div class="name">Supabase</div><div class="role">Backend + DB</div></div>
+        <div class="stack-item anim-fade anim-delay-3"><div class="name">Mercado Pago</div><div class="role">Pagos</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ ROADMAP ═══════════ -->
+  <section>
+    <div class="section-inner">
+      <span class="section-label">Roadmap</span>
+      <h2 class="section-title anim-fade">El juego apenas empieza.</h2>
+      <p class="section-sub anim-fade anim-delay-1">Del MVP a la red social de jugadores. SFS crece con el fútbol.</p>
+      <div class="roadmap">
+        <div class="road-step anim-fade anim-delay-1">
+          <div class="road-dot active"></div>
+          <h5>MVP</h5>
+          <small>Gestión de canchas</small>
+        </div>
+        <div class="road-step anim-fade anim-delay-2">
+          <div class="road-dot future"></div>
+          <h5 style="color:var(--text-dim)">Torneos</h5>
+          <small>Ligas y copas</small>
+        </div>
+        <div class="road-step anim-fade anim-delay-2">
+          <div class="road-dot future"></div>
+          <h5 style="color:var(--text-dim)">Perfiles</h5>
+          <small>Estadísticas</small>
+        </div>
+        <div class="road-step anim-fade anim-delay-3">
+          <div class="road-dot future"></div>
+          <h5 style="color:var(--text-dim)">Partidos</h5>
+          <small>Red social</small>
+        </div>
+        <div class="road-step anim-fade anim-delay-3">
+          <div class="road-dot future"></div>
+          <h5 style="color:var(--text-dim)">Mercado</h5>
+          <small>Jugadores</small>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ FOOTER ═══════════ -->
+  <footer>
+    <div style="display:flex;align-items:center;justify-content:center;gap:0.4rem;margin-bottom:0.4rem;opacity:0.4">
+      <svg width="16" height="16" viewBox="0 0 128 128"><path fill-rule="evenodd" d="M81 36 64 0 47 36l-1 2-9-10a6 6 0 0 0-9 9l10 10h-2L0 64l36 17h2L28 91a6 6 0 1 0 9 9l9-10 1 2 17 36 17-36v-2l9 10a6 6 0 1 0 9-9l-9-9 2-1 36-17-36-17-2-1 9-9a6 6 0 1 0-9-9l-9 10v-2Zm-17 2-2 5c-4 8-11 15-19 19l-5 2 5 2c8 4 15 11 19 19l2 5 2-5c4-8 11-15 19-19l5-2-5-2c-8-4-15-11-19-19l-2-5Z" clip-rule="evenodd" fill="#16a34a"/></svg>
+      <span style="font-weight:700;font-size:0.8rem">SFS</span>
+    </div>
+    <div class="footer-credit">
+      Proyecto personal de <a href="https://github.com/maoacr" target="_blank" rel="noopener">@maoacr</a>. Colombia.
+    </div>
+  </footer>
+
+</body>
+</html>

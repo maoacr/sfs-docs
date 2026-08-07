@@ -1,0 +1,346 @@
+---
+title: Design System
+description: Tokens, componentes, gradientes, sombras y patrones — el lenguaje visual de SFS.
+---
+
+import { Card, CardGrid, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+El Design System de SFS traduce la identidad visual en **reglas reutilizables**. Cada decisión — un color, una sombra, un radio — está codificada como token. Nada es "mágico".
+
+## Design Tokens
+
+La capa atómica del DS. Consumidos tanto por `web` (Tailwind) como por `docs` (Starlight).
+
+### Tokens de color
+
+<Tabs>
+<TabItem label="Verdes">
+
+| CSS Variable | Valor | Uso |
+|-------------|-------|-----|
+| `--sfs-field` | `#0a5c2a` | Fondos estructurales, badges |
+| `--sfs-field-light` | `#0d7234` | Hover de field, estados activos |
+| `--sfs-grass` | `#16a34a` | CTAs primarios, acentos, links |
+| `--sfs-grass-light` | `#22c55e` | Hover de CTAs, focus rings |
+| `--sfs-grass-glow` | `#4ade80` | Resplandor decorativo para efectos glow |
+
+</TabItem>
+<TabItem label="Superficies">
+
+| CSS Variable | Valor | Uso |
+|-------------|-------|-----|
+| `--sfs-bg` | `#0a0a0a` | Fondo principal |
+| `--sfs-surface` | `#141414` | Tarjetas, inputs, nav, sidebars |
+| `--sfs-surface-hover` | `#1c1c1c` | Hover de tarjetas |
+| `--sfs-elevated` | `#1a1a1a` | Dropdowns, modals, tooltips |
+
+</TabItem>
+<TabItem label="Texto">
+
+| CSS Variable | Valor | Uso |
+|-------------|-------|-----|
+| `--sfs-text` | `#ededed` | Texto principal, headings |
+| `--sfs-text-muted` | `#a1a1aa` | Texto secundario, placeholders |
+| `--sfs-text-dim` | `#71717a` | Texto terciario, metadatos |
+
+</TabItem>
+<TabItem label="Bordes">
+
+| CSS Variable | Valor | Uso |
+|-------------|-------|-----|
+| `--sfs-border` | `#262626` | Bordes por defecto |
+| `--sfs-border-hover` | `#404040` | Bordes en hover |
+| `--sfs-border-glow` | `rgba(22,163,74,0.15)` | Bordes con tinte verde en foco |
+
+</TabItem>
+<TabItem label="Estados">
+
+| CSS Variable | Valor | Uso |
+|-------------|-------|-----|
+| `--sfs-error` | `#ef4444` | Error, peligro |
+| `--sfs-error-bg` | `#1f0f0f` | Fondo de error |
+| `--sfs-warning` | `#f59e0b` | Advertencia |
+| `--sfs-warning-bg` | `#1f1806` | Fondo de warning |
+| `--sfs-success` | `#22c55e` | Éxito |
+| `--sfs-success-bg` | `#061a0e` | Fondo de éxito |
+| `--sfs-info` | `#3b82f6` | Información |
+| `--sfs-info-bg` | `#0a1628` | Fondo de info |
+
+</TabItem>
+</Tabs>
+
+### Tokens de gradiente
+
+Los gradientes son parte fundamental del lenguaje visual de SFS. No son decoración — son **profundidad y contexto**.
+
+| CSS Variable | Definición | Uso |
+|-------------|-----------|-----|
+| `--sfs-gradient-field` | `linear-gradient(135deg, #0a5c2a, #0d7234, #0a5c2a)` | Fondos de sección, badges |
+| `--sfs-gradient-grass` | `linear-gradient(135deg, #16a34a, #22c55e)` | Botones primarios, CTAs |
+| `--sfs-gradient-card` | `linear-gradient(135deg, #141414, #1a1a1a)` | Tarjetas y superficies elevadas |
+| `--sfs-gradient-glow` | `radial-gradient(ellipse, rgba(22,163,74,0.12), transparent)` | Resplandor detrás de hero/cards |
+| `--sfs-gradient-hero` | `linear-gradient(180deg, #0a5c2a08, #0a0a0a 60%)` | Overlay de hero sections |
+
+#### Reglas de gradientes
+
+- **Ángulo default**: 135° — evoca la diagonal del campo de fútbol.
+- **Máximo 3 stops** en gradientes lineales.
+- Los gradientes radiales (`glow`) son **decorativos, nunca funcionales**. No se pone texto sobre ellos.
+- Siempre usar la variable CSS, nunca hardcodear el gradiente.
+
+```css
+/* ✅ Correcto */
+background: var(--sfs-gradient-card);
+
+/* ❌ Incorrecto */
+background: linear-gradient(135deg, #141414 0%, #1a1a1a 100%);
+```
+
+### Tokens de sombra
+
+Las sombras en SFS **nunca son negras puras**. Incluyen un tinte verde que las ancla a la identidad visual.
+
+| CSS Variable | Valor | Uso |
+|-------------|-------|-----|
+| `--sfs-shadow-sm` | `0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(10,92,42,0.06)` | Elementos sutiles: rows, dividers |
+| `--sfs-shadow-md` | `0 4px 16px rgba(0,0,0,0.35), 0 2px 8px rgba(10,92,42,0.05)` | Cards estáticas |
+| `--sfs-shadow-lg` | `0 12px 40px rgba(0,0,0,0.45), 0 4px 16px rgba(10,92,42,0.06)` | Modals, dropdowns |
+| `--sfs-shadow-glow` | `0 0 30px rgba(22,163,74,0.1), 0 4px 20px rgba(0,0,0,0.4)` | Cards en hover (efecto highlight) |
+| `--sfs-shadow-card` | `0 1px 2px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.03)` | Cards default (con borde interno) |
+
+```css
+/* Card con sombra + hover glow */
+.card {
+  box-shadow: var(--sfs-shadow-card);
+  transition: box-shadow 250ms ease;
+}
+.card:hover {
+  box-shadow: var(--sfs-shadow-glow);
+}
+```
+
+### Tokens de border-radius
+
+SFS usa radios **orgánicos y generosos**. Nada es cuadrado.
+
+| Token | Valor | Uso |
+|-------|-------|-----|
+| `--sfs-radius-sm` | 6px | Código inline, badges, tags |
+| `--sfs-radius-md` | 10px | Botones, inputs, search |
+| `--sfs-radius-lg` | 14px | Code blocks, callouts, tabs |
+| `--sfs-radius-xl` | 18px | Cards, modals |
+| `--sfs-radius-2xl` | 24px | Hero containers, page sections |
+
+```tsx
+// Tailwind (los radios son ligeramente distintos porque Tailwind tiene su escala)
+<button className="rounded-lg ...">  {/* ≈10px — botones */}
+<div className="rounded-xl ...">     {/* ≈12px — cards */}
+<div className="rounded-2xl ...">    {/* ≈16px — containers grandes */}
+```
+
+## Sistema de espaciado
+
+Escala base `4px`, alineada con Tailwind.
+
+| Token | Valor | Tailwind | Uso |
+|-------|-------|----------|-----|
+| `1` | 4px | `p-1` | Espacio mínimo inline |
+| `2` | 8px | `p-2` / `gap-2` | Padding interno pequeño |
+| `3` | 12px | `p-3` | Padding compacto |
+| `4` | 16px | `p-4` / `gap-4` | Padding estándar |
+| `6` | 24px | `p-6` | Secciones |
+| `8` | 32px | `p-8` | Separación grande |
+| `12` | 48px | `p-12` | Hero padding |
+
+### Regla de espaciado mobile-first
+
+- **Mínimo 16px de padding lateral** en todo contenedor mobile.
+- **Gap entre elementos relacionados**: 8px (badge + texto), 12-16px (cards en grid), 24-32px (secciones).
+- **Safe area**: siempre `pb-safe` en el último elemento de una pantalla mobile.
+
+## Mobile UX & Gestos
+
+SFS se diseña **para el pulgar, no para el mouse**.
+
+### Jerarquía táctil
+
+| Elemento | Altura mínima | Justificación |
+|----------|--------------|---------------|
+| Botones | 44px | Estándar iOS/Android para touch targets |
+| Links en sidebar | 44px | Ídem, navegación mobile |
+| Inputs | 48px | Teclado mobile — espacio para tap preciso |
+| Tabs / Pills | 40px | Navegación secundaria |
+
+### Gestos soportados
+
+| Gesto | Acción | Implementación |
+|-------|--------|---------------|
+| **Tap** | Acción primaria (reservar, confirmar) | Nativo — onclick |
+| **Swipe horizontal** | Navegación entre tabs / pasos de formulario | Touch events + `translateX` |
+| **Swipe vertical (scroll)** | Listados infinitos, feed de canchas | Nativo — overflow scroll |
+| **Pull to refresh** | Recargar disponibilidad | `touch-action: pan-y` + scroll detection |
+| **Long press** | Vista previa de cancha / menú contextual | `onContextMenu` + `onTouchStart` con timer |
+
+### Reglas de UX mobile
+
+1. **Un toque = una decisión**. Si una acción requiere más de un tap, el flujo está mal.
+2. **El contenido importante arriba del fold**. En mobile, el 60% del viewport es lo que se ve sin scroll.
+3. **Navegación con el pulgar**: bottom tab bar (iOS-style) con safe-area. Los elementos críticos en la mitad inferior de la pantalla.
+4. **Feedback inmediato**: cada tap tiene respuesta visual en < 100ms (scale, opacity, o color).
+5. **Sin modals en mobile**: usar bottom sheets que ocupen el 50-80% del viewport, swipeables para cerrar.
+
+```tsx
+// Ejemplo: Bottom Tab Bar con safe area
+<nav className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border pb-safe">
+  <div className="flex justify-around items-center h-14">
+    <TabItem icon="search" label="Buscar" />
+    <TabItem icon="calendar" label="Reservas" />
+    <TabItem icon="bell" label="Notificaciones" />
+    <TabItem icon="user" label="Perfil" />
+  </div>
+</nav>
+```
+
+## Imágenes: el elemento más importante
+
+En SFS, **la imagen manda**. Cada layout se construye alrededor de la imagen, no al revés.
+
+### Jerarquía visual
+
+```
+1. Imagen (hero, card thumbnail)
+2. Título / nombre de la cancha
+3. Precio / disponibilidad (CTA implícito)
+4. Metadata secundaria (ubicación, tipo de superficie)
+5. Acciones explícitas (botón "Reservar")
+```
+
+### Patrones de imagen
+
+| Patrón | Mobile | Desktop |
+|--------|--------|---------|
+| **Hero image** | 100vw × 60vh, overlay gradient sutil | 50% width, sticky o parallax |
+| **Card thumbnail** | 80-120px altura, 16:9 o 4:3 | 180-240px, mismo ratio |
+| **Listado** | Thumbnail 80px, lazy loading con blur placeholder | Thumbnail 120px |
+| **Galería** | Swipe horizontal, dots indicadores | Grid 2-3 columnas |
+
+### Optimización de imágenes
+
+```tsx
+// Next.js Image — el approach recomendado
+import Image from 'next/image';
+
+<Image
+  src="/canchas/la-bombonera.webp"
+  alt="Cancha La Bombonera — césped sintético, 5 vs 5"
+  width={800}
+  height={450}
+  sizes="(max-width: 768px) 100vw, 50vw"
+  priority={isHero} // true solo para la imagen hero (above the fold)
+  placeholder="blur"
+  blurDataURL="data:image/webp;base64,..."
+  className="rounded-xl object-cover"
+/>
+```
+
+- **Formato**: WebP primario, AVIF como fallback para navegadores modernos.
+- **Resolución**: máximo 2x para retina. Nunca servir imagen de 4000px para un thumbnail de 80px.
+- **Lazy loading**: default en todo excepto la hero image (`priority`).
+- **Blur placeholder**: siempre. Un placeholder de 20px blur-up es mejor que un rectángulo gris.
+
+## Componentes
+
+SFS construye sobre Tailwind + shadcn/ui. Cada componente respeta los tokens del DS.
+
+### Componentes base (atoms)
+
+| Componente | Variantes | Notas |
+|-----------|----------|-------|
+| **Button** | primary (gradiente grass), secondary (surface + border), ghost | Altura mínima 44px mobile |
+| **Input** | default, error, disabled | Label arriba, focus ring verde, borde sutil |
+| **Badge** | default, success, warning, error | `rounded-full`, fondo gradiente field |
+| **Card** | default, hover (glow shadow) | Gradiente surface, border 1px, sombra con tinte verde |
+
+### Componentes compuestos (molecules)
+
+| Componente | Archivo | Rol |
+|-----------|---------|-----|
+| **AuthForm** | `web/src/components/auth-form.tsx` | Split 50/50 desktop: imagen de cancha + formulario |
+| **AppSidebar** | `web/src/components/app-sidebar.tsx` | Navegación lateral |
+| **BottomTabBar** | `web/src/components/bottom-tab-bar.tsx` | Nav mobile con safe-area |
+| **AgendaView** | `web/src/components/agenda-view.tsx` | Calendario de reservas |
+| **NotificationBell** | `web/src/components/notification-bell.tsx` | Badge + dropdown |
+| **OfflineBanner** | `web/src/components/offline-banner.tsx` | Estado offline |
+| **PwaRegister** | `web/src/components/pwa-register.tsx` | Instalación PWA |
+| **ProfileForm** | `web/src/components/profile-form.tsx` | Edición de perfil |
+
+### 8 estados que todo componente debe cubrir
+
+<Steps>
+1. **Default** — Estado base.
+2. **Hover** — Sombra glow + translateY(-2px) para cards, brighten(1.1) para buttons.
+3. **Focus** — `ring-2 ring-grass ring-offset-2 ring-offset-bg`.
+4. **Active** — `scale-[0.98]` o similar.
+5. **Disabled** — `opacity-50 cursor-not-allowed`.
+6. **Loading** — Spinner o skeleton + `aria-busy`.
+7. **Error** — Borde rojo + mensaje.
+8. **Empty** — Ilustración geométrica abstracta + CTA.
+</Steps>
+
+## Breakpoints responsive
+
+Mobile-first con los breakpoints de Tailwind:
+
+| Breakpoint | Width | Dispositivo |
+|-----------|-------|-----------|
+| default | 0px | Mobile (diseño base) |
+| `sm` | 640px | Teléfonos grandes |
+| `md` | 768px | Tablets |
+| `lg` | 1024px | Laptops |
+| `xl` | 1280px | Desktop |
+| `2xl` | 1536px | Desktop grande |
+
+```tsx
+// Mobile-first: 1 col → 2 cols (tablet) → 3 cols (desktop)
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+```
+
+## Animaciones
+
+Funcionales, nunca decorativas. Cada animación comunica un cambio de estado.
+
+| Animación | Duración | Easing | Uso |
+|-----------|----------|--------|-----|
+| Color/borde | 150ms | `ease` | Hover |
+| Slide-up | 250ms | `ease-out` | Modals, bottom sheets, toasts |
+| Fade-in | 200ms | `ease-out` | Tooltips, dropdowns |
+| Spinner | loop | `linear` | Carga |
+
+### Reglas
+
+- Nunca > 300ms para interacciones de UI.
+- Respetar `prefers-reduced-motion`.
+- No animar elementos repetitivos (listas, grids) — solo elementos únicos (modals, notificaciones).
+- Usar `transform` y `opacity` (GPU-accelerated), nunca `width`/`height`/`top`/`left`.
+
+## Accesibilidad
+
+WCAG 2.1 AA mínimo.
+
+| Regla | Implementación |
+|-------|---------------|
+| **Contraste** | Texto `#ededed` sobre `#0a0a0a` = 15.2:1 (AAA) |
+| **Focus** | `ring-2 ring-grass` en todo elemento interactivo |
+| **Labels** | `<label htmlFor>` siempre, nunca placeholder-only |
+| **Touch targets** | Mínimo 44×44px |
+| **Alt text** | Imágenes de contenido: descriptivo. Decorativas: `alt=""` |
+| **ARIA** | `aria-busy` en loading, `aria-live` en notificaciones |
+| **Reduced motion** | `@media (prefers-reduced-motion: reduce)` |
+
+## Gobernanza
+
+1. **Single source of truth**: `web/src/app/globals.css` → tokens.
+2. **Sync obligatorio**: `web/src/app/globals.css` ↔ `docs/src/styles/custom.css`.
+3. **Document first**: nuevo token o componente → documentar antes de usar.
+4. **No magic values**: un color/spacing/tipografía sin variable = bug de diseño.
+5. **Field pattern**: `docs/src/assets/field-pattern.svg` es el elemento decorativo de fútbol. Cualquier cambio en la identidad gráfica del deporte debe reflejarse ahí.

@@ -1,0 +1,246 @@
+---
+title: Branding
+description: Identidad visual de SFS — fútbol, elegancia y minimalismo en cada píxel.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+SFS no es una app genérica pintada de verde. Es una plataforma que **respira fútbol**. Cada decisión visual —desde la paleta hasta las sombras— evoca la cancha, el partido bajo las luces, la precisión de un pase.
+
+## La cancha como inspiración
+
+El lenguaje visual de SFS se construye sobre los elementos gráficos del fútbol, reinterpretados con elegancia y abstracción:
+
+| Elemento del fútbol | Traducción visual en SFS |
+|--------------------|--------------------------|
+| **El césped** | La paleta de verdes (`field` + `grass`) y los gradientes que evocan la textura del campo |
+| **Las líneas del campo** | Patrón de fondo sutil con círculo central, arcos y líneas de banda — visible como textura decorativa |
+| **El partido nocturno** | Fondo oscuro (`#0a0a0a`) que emula la cancha iluminada artificialmente |
+| **La red del arco** | Sombras suaves con tinte verde y geometrías orgánicas (border-radius amplios) |
+| **El movimiento del balón** | Animaciones fluidas, transiciones suaves, gradientes direccionales |
+
+### Imaginería del fútbol
+
+SFS usa imágenes como **protagonistas absolutos** de cada pantalla. No como decoración — como el centro de la experiencia:
+
+- **Fotos de canchas reales** en máxima calidad, optimizadas para carga rápida en mobile
+- **Imágenes hero** que ocupan el viewport completo en la landing y páginas de descubrimiento
+- **Miniaturas nítidas** en listados y resultados de búsqueda, con lazy loading y placeholders
+- **Ilustraciones geométricas** (abstractas, inspiradas en líneas de campo) para estados vacíos y onboarding
+
+Nunca usar:
+- Fotos de archivo (stock photography)
+- Imágenes genéricas de personas jugando sin contexto real
+- Ilustraciones cartoon o infantiles
+
+## Filosofía visual: elegancia, futuro, minimalismo
+
+Tres palabras que definen cada decisión de diseño en SFS:
+
+<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:16px; margin:1.5rem 0;">
+
+<div style="background:linear-gradient(135deg, #141414 0%, #1a1a1a 100%); border-radius:14px; padding:1.5rem; box-shadow:0 1px 2px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.03) inset;">
+  <div style="font-size:1.5rem; margin-bottom:0.5rem;">✨</div>
+  <div style="font-weight:700; font-size:1rem; color:#ededed; margin-bottom:0.5rem;">Elegancia</div>
+  <div style="font-size:0.8rem; color:#a1a1aa; line-height:1.5;">Gradientes sutiles, sombras con personalidad, tipografía refinada. Nada es cuadrado — todo tiene curva, intención, profundidad.</div>
+</div>
+
+<div style="background:linear-gradient(135deg, #141414 0%, #1a1a1a 100%); border-radius:14px; padding:1.5rem; box-shadow:0 1px 2px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.03) inset;">
+  <div style="font-size:1.5rem; margin-bottom:0.5rem;">🔮</div>
+  <div style="font-weight:700; font-size:1rem; color:#ededed; margin-bottom:0.5rem;">Futuro</div>
+  <div style="font-size:0.8rem; color:#a1a1aa; line-height:1.5;">Glassmorphism, blur effects, transiciones fluidas. La interfaz se siente viva, no estática. El scroll es un gesto, no una acción mecánica.</div>
+</div>
+
+<div style="background:linear-gradient(135deg, #141414 0%, #1a1a1a 100%); border-radius:14px; padding:1.5rem; box-shadow:0 1px 2px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.03) inset;">
+  <div style="font-size:1.5rem; margin-bottom:0.5rem;">◻️</div>
+  <div style="font-weight:700; font-size:1rem; color:#ededed; margin-bottom:0.5rem;">Minimalismo</div>
+  <div style="font-size:0.8rem; color:#a1a1aa; line-height:1.5;">Flujos de usuario mínimos. Un toque = una acción. Sin menús anidados, sin wizard de 7 pasos ni configuraciones que podrían ser defaults inteligentes.</div>
+</div>
+
+</div>
+
+## Paleta de colores
+
+El sistema cromático de SFS se construye sobre **dos verdes ancla** y una escala de grises oscuros. Todo existe en modo oscuro por defecto.
+
+<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px,1fr)); gap:12px; margin:1.5rem 0;">
+
+<div style="background:linear-gradient(135deg, #0a5c2a, #0d7234); border-radius:10px; padding:1rem; min-height:80px; display:flex; flex-direction:column; justify-content:flex-end; border:1px solid #0d7234;">
+  <div style="font-weight:700; font-size:0.8rem; color:#22c55e;">Field</div>
+  <div style="font-size:0.7rem; color:#6ee7a7; font-family:monospace;">#0a5c2a</div>
+</div>
+
+<div style="background:linear-gradient(135deg, #0d7234, #0a5c2a); border-radius:10px; padding:1rem; min-height:80px; display:flex; flex-direction:column; justify-content:flex-end; border:1px solid #0a5c2a;">
+  <div style="font-weight:700; font-size:0.8rem; color:#22c55e;">Field Light</div>
+  <div style="font-size:0.7rem; color:#6ee7a7; font-family:monospace;">#0d7234</div>
+</div>
+
+<div style="background:linear-gradient(135deg, #16a34a, #22c55e); border-radius:10px; padding:1rem; min-height:80px; display:flex; flex-direction:column; justify-content:flex-end; border:1px solid #22c55e;">
+  <div style="font-weight:700; font-size:0.8rem; color:#fff;">Grass</div>
+  <div style="font-size:0.7rem; color:#bbf7d0; font-family:monospace;">#16a34a</div>
+</div>
+
+<div style="background:linear-gradient(135deg, #22c55e, #4ade80); border-radius:10px; padding:1rem; min-height:80px; display:flex; flex-direction:column; justify-content:flex-end; border:1px solid #16a34a;">
+  <div style="font-weight:700; font-size:0.8rem; color:#0a5c2a;">Grass Light</div>
+  <div style="font-size:0.7rem; color:#0d7234; font-family:monospace;">#22c55e</div>
+</div>
+
+</div>
+
+### Superficies y texto
+
+<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px,1fr)); gap:12px; margin:1.5rem 0;">
+
+<div style="background:#0a0a0a; border-radius:10px; padding:1rem; min-height:70px; display:flex; flex-direction:column; justify-content:flex-end; border:1px solid #262626;">
+  <div style="font-weight:700; font-size:0.8rem; color:#ededed;">Background</div>
+  <div style="font-size:0.7rem; color:#a1a1aa; font-family:monospace;">#0a0a0a</div>
+</div>
+
+<div style="background:linear-gradient(135deg, #141414, #1a1a1a); border-radius:10px; padding:1rem; min-height:70px; display:flex; flex-direction:column; justify-content:flex-end; border:1px solid #262626;">
+  <div style="font-weight:700; font-size:0.8rem; color:#ededed;">Surface</div>
+  <div style="font-size:0.7rem; color:#a1a1aa; font-family:monospace;">#141414</div>
+</div>
+
+<div style="background:#1c1c1c; border-radius:10px; padding:1rem; min-height:70px; display:flex; flex-direction:column; justify-content:flex-end; border:1px solid #262626;">
+  <div style="font-weight:700; font-size:0.8rem; color:#ededed;">Surface Hover</div>
+  <div style="font-size:0.7rem; color:#a1a1aa; font-family:monospace;">#1c1c1c</div>
+</div>
+
+<div style="background:#1a1a1a; border-radius:10px; padding:1rem; min-height:70px; display:flex; flex-direction:column; justify-content:flex-end; border:1px solid #262626;">
+  <div style="font-weight:700; font-size:0.8rem; color:#ededed;">Elevated</div>
+  <div style="font-size:0.7rem; color:#a1a1aa; font-family:monospace;">#1a1a1a</div>
+</div>
+
+<div style="background:#ededed; border-radius:10px; padding:1rem; min-height:70px; display:flex; flex-direction:column; justify-content:flex-end; border:1px solid #d4d4d4;">
+  <div style="font-weight:700; font-size:0.8rem; color:#0a0a0a;">Text</div>
+  <div style="font-size:0.7rem; color:#525252; font-family:monospace;">#ededed</div>
+</div>
+
+<div style="background:#a1a1aa; border-radius:10px; padding:1rem; min-height:70px; display:flex; flex-direction:column; justify-content:flex-end; border:1px solid #d4d4d4;">
+  <div style="font-weight:700; font-size:0.8rem; color:#0a0a0a;">Text Muted</div>
+  <div style="font-size:0.7rem; color:#525252; font-family:monospace;">#a1a1aa</div>
+</div>
+
+<div style="background:#71717a; border-radius:10px; padding:1rem; min-height:70px; display:flex; flex-direction:column; justify-content:flex-end; border:1px solid #a1a1aa;">
+  <div style="font-weight:700; font-size:0.8rem; color:#0a0a0a;">Text Dim</div>
+  <div style="font-size:0.7rem; color:#3f3f46; font-family:monospace;">#71717a</div>
+</div>
+
+</div>
+
+### Filosofía del color
+
+| Principio | Aplicación |
+|-----------|-----------|
+| **Dark-first** | El fondo `#0a0a0a` emula la cancha nocturna. Los acentos verdes resaltan como el césped bajo las luces del estadio. |
+| **Dos verdes, un propósito** | `field` (`#0a5c2a`) es profundo — fondos, secciones, badges. `grass` (`#16a34a`) es vibrante — CTAs, links, acentos. |
+| **Profundidad con gradientes** | Las superficies nunca son planas. Un gradiente sutil (`#141414` → `#1a1a1a`) da profundidad sin romper el minimalismo. |
+| **Sombras con intención** | Las sombras incluyen un tinte verde (`rgba(10, 92, 42, ...)`) que las ancla al tema. No son negras — son del color del campo. |
+
+## Gradientes
+
+SFS define tres gradientes principales que se usan consistentemente en toda la plataforma:
+
+| Gradiente | CSS | Uso |
+|-----------|-----|-----|
+| **Field** | `linear-gradient(135deg, #0a5c2a, #0d7234, #0a5c2a)` | Fondos de sección, badges, headers |
+| **Grass** | `linear-gradient(135deg, #16a34a, #22c55e)` | Botones primarios, CTAs |
+| **Glow** | `radial-gradient(ellipse, rgba(22,163,74,0.12), transparent)` | Resplandor decorativo detrás de hero y cards destacadas |
+
+### Reglas de gradientes
+
+- Usar **ángulo 135°** como default — evoca la diagonal del campo de fútbol.
+- Nunca más de **3 stops** en un gradiente lineal.
+- Los gradientes radiales (`glow`) son **decorativos, no funcionales**. Nunca poner texto sobre ellos.
+
+## Tipografía
+
+SFS usa **Geist** de Vercel como familia tipográfica principal, complementada con `Geist Mono` para código.
+
+<div style="font-size:3rem; font-weight:700; letter-spacing:-0.03em; line-height:1.1; margin:1rem 0;">
+  Geist Bold — Títulos
+</div>
+<div style="font-size:1.125rem; line-height:1.7; margin:0.5rem 0 1.5rem; max-width:600px;">
+  Geist Regular — Cuerpo de texto. Diseñada para legibilidad en pantalla con alturas-x generosas y formas abiertas. Funciona especialmente bien en modo oscuro.
+</div>
+<div style="font-size:0.875rem; font-family:'Geist Mono',monospace; background:var(--sl-color-bg-inline-code); padding:0.6rem 1rem; border-radius:6px; margin-bottom:1.5rem; display:inline-block;">
+  Geist Mono — Código y datos tabulares
+</div>
+
+### Escala tipográfica
+
+| Token | Tamaño | Uso |
+|-------|--------|-----|
+| `xs` | 12px | Badges, metadatos |
+| `sm` | 14px | Texto secundario, labels |
+| `base` | 16px | Cuerpo de texto |
+| `lg` | 18px | Subtítulos |
+| `xl` | 20px | Títulos de sección pequeños |
+| `2xl` | 24px | Títulos de sección |
+| `3xl` | 30px | Títulos de página |
+| `4xl` | 36px | Hero tagline |
+| `5xl` | 48px | Reservado para moments especiales |
+
+## Logo e isotipo
+
+El logotipo de SFS es puramente tipográfico: las tres letras **SFS** compuestas en Geist Bold. Para el favicon y espacios pequeños, se usa un isotipo geométrico — una **estrella de fútbol** con puntas que sugieren movimiento.
+
+<div style="display:flex; align-items:center; gap:1rem; margin:1.5rem 0; padding:1.5rem; background:linear-gradient(135deg, #141414, #1a1a1a); border-radius:14px; border:1px solid #262626; box-shadow:0 1px 2px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.25);">
+  <svg width="48" height="48" viewBox="0 0 128 128" style="flex-shrink:0;">
+    <defs><linearGradient id="logo-grad2" x1="0" y1="0" x2="128" y2="128"><stop offset="0%" stop-color="#0a5c2a"/><stop offset="100%" stop-color="#16a34a"/></linearGradient></defs>
+    <path fill-rule="evenodd" d="M81 36 64 0 47 36l-1 2-9-10a6 6 0 0 0-9 9l10 10h-2L0 64l36 17h2L28 91a6 6 0 1 0 9 9l9-10 1 2 17 36 17-36v-2l9 10a6 6 0 1 0 9-9l-9-9 2-1 36-17-36-17-2-1 9-9a6 6 0 1 0-9-9l-9 10v-2Zm-17 2-2 5c-4 8-11 15-19 19l-5 2 5 2c8 4 15 11 19 19l2 5 2-5c4-8 11-15 19-19l5-2-5-2c-8-4-15-11-19-19l-2-5Z" clip-rule="evenodd" fill="url(#logo-grad2)"/>
+    <path d="M118 19a6 6 0 0 0-9-9l-3 3a6 6 0 1 0 9 9l3-3Zm-96 4c-2 2-6 2-9 0l-3-3a6 6 0 1 1 9-9l3 3c3 2 3 6 0 9Zm0 82c-2-2-6-2-9 0l-3 3a6 6 0 1 0 9 9l3-3c3-2 3-6 0-9Zm96 4a6 6 0 0 1-9 9l-3-3a6 6 0 1 1 9-9l3 3Z" fill="#22c55e"/>
+  </svg>
+  <div>
+    <div style="font-size:1.5rem; font-weight:700; letter-spacing:-0.02em;">SFS</div>
+    <div style="font-size:0.8rem; color:#71717a;">Logotipo + Isotipo</div>
+  </div>
+</div>
+
+## Imagen como protagonista
+
+En SFS, **las imágenes mandan**. Cada pantalla se diseña alrededor de la imagen, no al revés:
+
+1. **Hero images** ocupan el 100% del viewport en mobile. En desktop, 50-60%.
+2. **Cards de cancha** muestran la foto primero, los datos después.
+3. **Listados** usan thumbnails grandes (mínimo 80px en mobile) con lazy loading.
+4. **Estados vacíos** usan ilustraciones geométricas abstractas (no fotos de stock).
+5. **Optimización**: WebP/AVIF con `srcset`, blur-up placeholders, carga progresiva.
+
+## Tono de voz
+
+SFS habla como un **compañero de equipo**, no como un manual corporativo.
+
+| Principio | Significado |
+|-----------|------------|
+| **Directo** | "Reservá tu cancha", no "Proceda a efectuar su reserva". |
+| **Cálido** | El fútbol es pasión. Cercanía, no formalidad. |
+| **Útil** | Cada palabra ayuda a completar una tarea. |
+| **Neutro** | "Administrador" y "Jugador" en la UI, no "dueño". |
+
+### Ejemplos
+
+<div style="background:linear-gradient(135deg, #141414, #1a1a1a); border-radius:10px; border:1px solid #262626; border-left:3px solid #16a34a; padding:1rem 1.25rem; margin:1rem 0; box-shadow:0 1px 2px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.25);">
+  <strong style="color:#22c55e;">✅ Hacer</strong>
+  <p style="margin:0.25rem 0 0;">"Tu reserva está confirmada para el sábado a las 18:00."</p>
+</div>
+
+<div style="background:linear-gradient(135deg, #141414, #1a1a1a); border-radius:10px; border:1px solid #262626; border-left:3px solid #16a34a; padding:1rem 1.25rem; margin:1rem 0; box-shadow:0 1px 2px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.25);">
+  <strong style="color:#22c55e;">✅ Hacer</strong>
+  <p style="margin:0.25rem 0 0;">"La cancha 'La Bombonera' ya no está disponible. ¿Probamos a las 19:00?"</p>
+</div>
+
+<div style="background:linear-gradient(135deg, #141414, #1a1a1a); border-radius:10px; border:1px solid #262626; border-left:3px solid #ef4444; padding:1rem 1.25rem; margin:1rem 0; box-shadow:0 1px 2px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.25);">
+  <strong style="color:#ef4444;">❌ Evitar</strong>
+  <p style="margin:0.25rem 0 0;">"Se ha producido un error al procesar su solicitud de reserva. Por favor, intente nuevamente."</p>
+</div>
+
+## Recursos
+
+| Archivo | Propósito |
+|---------|-----------|
+| `web/src/app/globals.css` | Fuente de verdad para la app (Tailwind `@theme inline`) |
+| `docs/src/styles/custom.css` | Adaptación del DS para Starlight (mismas variables) |
+| `docs/src/assets/field-pattern.svg` | Patrón decorativo de campo de fútbol |
+
+Cualquier cambio en paleta, gradientes o tipografía debe reflejarse en **todos** los archivos relevantes.
