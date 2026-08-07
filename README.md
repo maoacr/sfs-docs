@@ -42,7 +42,7 @@ pnpm preview      # Previsualizar build
 
 ## Despliegue
 
-El sitio se despliega automáticamente en Vercel al pushear a `main`.
+**Producción:** [sfsdocs.maoacr.com](https://sfsdocs.maoacr.com) (Netlify) — despliegue automático al pushear a `main`.
 
 ---
 
