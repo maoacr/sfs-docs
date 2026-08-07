@@ -34,6 +34,7 @@ export default defineConfig({
 				{
 					label: 'Guías',
 					items: [
+						{ label: 'Email (Resend)', slug: 'guides/email' },
 						{ label: 'Zonas Horarias', slug: 'guides/timezone' },
 					],
 				},

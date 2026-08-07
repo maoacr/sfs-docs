@@ -1,0 +1,85 @@
+---
+title: Configuración de Email (Resend)
+description: Cómo configurar el envío de emails transaccionales con Resend.
+---
+
+SFS usa [Resend](https://resend.com) para emails transaccionales: confirmaciones de reserva, cancelaciones, recordatorios y notificaciones de expiración.
+
+## Setup
+
+### 1. Crear cuenta en Resend
+
+Registrate en [resend.com](https://resend.com). El tier gratuito incluye 100 emails/día (3,000/mes).
+
+### 2. Obtener API Key
+
+Dashboard → **API Keys** → **Create API Key** → copiá la key (formato `re_xxxxx`).
+
+### 3. Configurar en .env
+
+```bash
+RESEND_API_KEY=re_xxxxx
+```
+
+### 4. Verificar dominio (producción)
+
+Para enviar desde tu propio dominio:
+
+1. Dashboard → **Domains** → **Add Domain**
+2. Agregá los registros DNS que Resend te indica (MX, DKIM, SPF)
+3. Una vez verificado, actualizá el `FROM` en `src/lib/email.ts`:
+
+```ts
+const FROM = "SFS <notificaciones@tudominio.com>";
+```
+
+Para desarrollo/test, podés usar `onboarding@resend.dev` sin verificar dominio (solo envía a tu email registrado).
+
+## Templates
+
+Los templates de email están en `src/lib/email.ts`. Hay dos sets:
+
+### Plantillas para el jugador
+
+| Evento | Subject |
+|--------|---------|
+| Reserva creada | ⚽ Reserva pendiente — Cancha X fecha |
+| Reserva confirmada | ✅ Reserva confirmada — Cancha X fecha |
+| Reserva cancelada | ❌ Reserva cancelada — Cancha X fecha |
+| Partido completado | 🏆 ¿Cómo estuvo? — Cancha X fecha |
+| Reserva expirada | ⏰ Reserva expirada — Cancha X fecha |
+
+### Plantillas para el dueño
+
+| Evento | Subject |
+|--------|---------|
+| Reserva creada | ❌ No se envía (evitar spam) |
+| Pago confirmado | ✅ Pago recibido — Cancha X fecha |
+| Reserva cancelada | ❌ Cancelación — Cancha X fecha |
+
+## Flujo de envío
+
+```
+Cambio de estado de reserva
+        │
+        ▼
+notificarCambioReserva()
+        │
+   ┌────┴────┐
+   │         │
+   ▼         ▼
+In-app     Email
+(DB)      (Resend)
+```
+
+Los emails se envían como fire-and-forget — si Resend falla, la operación de reserva no se ve afectada. Los errores se loguean en consola.
+
+## Testing
+
+En desarrollo, si `RESEND_API_KEY` no está configurada, los emails se skippean con un log:
+
+```
+[EMAIL] Resend no configurado — skip: ⚽ Reserva pendiente...
+```
+
+Para ver todos los emails enviados (incluyendo fallidos), revisá el dashboard de Resend → **Emails**.
