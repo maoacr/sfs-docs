@@ -14,52 +14,50 @@
     </clipPath>
   </defs>
 
-  <!-- Campo completo -->
   <g clip-path="url(#field-clip)">
-    <!-- Fondo del campo -->
     <rect width="800" height="400" fill="url(#fg)"/>
     <rect width="800" height="400" fill="url(#glow)"/>
 
     <!-- Líneas de banda -->
-    <rect x="40" y="20" width="720" height="360" stroke="#16a34a" stroke-opacity="0.45" stroke-width="1.5" rx="2"/>
+    <rect x="40" y="20" width="720" height="360" stroke="#16a34a" stroke-opacity="0.30" stroke-width="1.5" rx="2"/>
 
     <!-- Línea central -->
-    <line x1="400" y1="20" x2="400" y2="380" stroke="#16a34a" stroke-opacity="0.35" stroke-width="1"/>
+    <line x1="400" y1="20" x2="400" y2="380" stroke="#16a34a" stroke-opacity="0.30" stroke-width="1"/>
 
     <!-- Círculo central -->
-    <circle cx="400" cy="200" r="75" stroke="#16a34a" stroke-opacity="0.4" stroke-width="1.2"/>
+    <circle cx="400" cy="200" r="75" stroke="#16a34a" stroke-opacity="0.30" stroke-width="1.2"/>
 
     <!-- Punto central -->
-    <circle cx="400" cy="200" r="4" fill="#22c55e" fill-opacity="0.45"/>
+    <circle cx="400" cy="200" r="4" fill="#22c55e" fill-opacity="0.30"/>
 
     <!-- Área grande izquierda -->
-    <rect x="40" y="100" width="140" height="200" stroke="#16a34a" stroke-opacity="0.4" stroke-width="1.2"/>
+    <rect x="40" y="100" width="140" height="200" stroke="#16a34a" stroke-opacity="0.30" stroke-width="1.2"/>
 
     <!-- Área chica izquierda -->
-    <rect x="40" y="145" width="55" height="110" stroke="#16a34a" stroke-opacity="0.45" stroke-width="1.2"/>
+    <rect x="40" y="145" width="55" height="110" stroke="#16a34a" stroke-opacity="0.30" stroke-width="1.2"/>
 
     <!-- Punto penal izquierdo -->
-    <circle cx="130" cy="200" r="3" fill="#22c55e" fill-opacity="0.4"/>
+    <circle cx="130" cy="200" r="3" fill="#22c55e" fill-opacity="0.30"/>
 
-    <!-- Arco penal izquierdo: centrado en (130,200), radio 75, curva hacia la derecha -->
-    <path d="M 180 144 A 75 75 0 0 1 180 256" stroke="#16a34a" stroke-opacity="0.4" stroke-width="1.2" fill="none"/>
+    <!-- Arco penal izquierdo -->
+    <path d="M 180 144 A 75 75 0 0 1 180 256" stroke="#16a34a" stroke-opacity="0.30" stroke-width="1.2" fill="none"/>
 
     <!-- Área grande derecha -->
-    <rect x="620" y="100" width="140" height="200" stroke="#16a34a" stroke-opacity="0.4" stroke-width="1.2"/>
+    <rect x="620" y="100" width="140" height="200" stroke="#16a34a" stroke-opacity="0.30" stroke-width="1.2"/>
 
     <!-- Área chica derecha -->
-    <rect x="705" y="145" width="55" height="110" stroke="#16a34a" stroke-opacity="0.45" stroke-width="1.2"/>
+    <rect x="705" y="145" width="55" height="110" stroke="#16a34a" stroke-opacity="0.30" stroke-width="1.2"/>
 
     <!-- Punto penal derecho -->
-    <circle cx="670" cy="200" r="3" fill="#22c55e" fill-opacity="0.4"/>
+    <circle cx="670" cy="200" r="3" fill="#22c55e" fill-opacity="0.30"/>
 
-    <!-- Arco penal derecho: centrado en (670,200), radio 75, curva hacia la izquierda -->
-    <path d="M 620 144 A 75 75 0 0 0 620 256" stroke="#16a34a" stroke-opacity="0.4" stroke-width="1.2" fill="none"/>
+    <!-- Arco penal derecho -->
+    <path d="M 620 144 A 75 75 0 0 0 620 256" stroke="#16a34a" stroke-opacity="0.30" stroke-width="1.2" fill="none"/>
 
     <!-- Esquinas -->
-    <path d="M 40 20 Q 40 45 65 45" stroke="#22c55e" stroke-opacity="0.35" stroke-width="1" fill="none"/>
-    <path d="M 760 20 Q 760 45 735 45" stroke="#22c55e" stroke-opacity="0.35" stroke-width="1" fill="none"/>
-    <path d="M 40 380 Q 40 355 65 355" stroke="#22c55e" stroke-opacity="0.35" stroke-width="1" fill="none"/>
-    <path d="M 760 380 Q 760 355 735 355" stroke="#22c55e" stroke-opacity="0.35" stroke-width="1" fill="none"/>
+    <path d="M 40 20 Q 40 45 65 45" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
+    <path d="M 760 20 Q 760 45 735 45" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
+    <path d="M 40 380 Q 40 355 65 355" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
+    <path d="M 760 380 Q 760 355 735 355" stroke="#22c55e" stroke-opacity="0.30" stroke-width="1" fill="none"/>
   </g>
 </svg>
