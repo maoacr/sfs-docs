@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630">
+      <stop offset="0%" stop-color="#0a0a0a"/>
+      <stop offset="50%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#0a0a0a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="600" cy="280" r="400">
+      <stop offset="0%" stop-color="#16a34a" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Subtle field lines -->
+  <g opacity="0.06">
+    <rect x="60" y="40" width="1080" height="550" stroke="#16a34a" stroke-width="2" fill="none" rx="4"/>
+    <line x1="600" y1="40" x2="600" y2="590" stroke="#16a34a" stroke-width="1.5"/>
+    <circle cx="600" cy="315" r="120" stroke="#16a34a" stroke-width="1.5" fill="none"/>
+    <circle cx="600" cy="315" r="5" fill="#22c55e"/>
+  </g>
+
+  <!-- Ball emoji -->
+  <text x="600" y="220" text-anchor="middle" font-size="140">⚽</text>
+
+  <!-- SFS Title -->
+  <text x="600" y="370" text-anchor="middle" font-family="'Geist','Inter',sans-serif" font-weight="800" font-size="110" fill="#ededed" letter-spacing="-0.03em">SFS</text>
+
+  <!-- Tagline -->
+  <text x="600" y="435" text-anchor="middle" font-family="'Geist','Inter',sans-serif" font-weight="400" font-size="28" fill="#a1a1aa">Gestión de canchas de fútbol</text>
+
+  <!-- Divider line -->
+  <line x1="450" y1="480" x2="750" y2="480" stroke="#16a34a" stroke-width="1" opacity="0.3"/>
+
+  <!-- Credit -->
+  <text x="600" y="530" text-anchor="middle" font-family="'Geist','Inter',sans-serif" font-weight="500" font-size="20" fill="#71717a">@maoacr</text>
+</svg>

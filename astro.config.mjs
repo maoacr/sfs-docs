@@ -7,6 +7,11 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: '⚽ SFS',
+			head: [
+				{ tag: 'meta', attrs: { property: 'og:image', content: 'https://sfsdocs.maoacr.com/og-image.svg' } },
+				{ tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
+				{ tag: 'meta', attrs: { name: 'twitter:image', content: 'https://sfsdocs.maoacr.com/og-image.svg' } },
+			],
 			social: [],
 			customCss: ['./src/styles/custom.css'],
 			defaultLocale: 'root',
