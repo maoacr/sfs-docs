@@ -1,19 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Balón de fútbol clásico — pentágonos y hexágonos -->
   <defs>
-    <radialGradient id="ball" cx="40%" cy="35%">
+    <radialGradient id="shine" cx="35%" cy="30%">
       <stop offset="0%" stop-color="#fff"/>
-      <stop offset="100%" stop-color="#d4d4d4"/>
+      <stop offset="70%" stop-color="#e5e5e5"/>
+      <stop offset="100%" stop-color="#b0b0b0"/>
     </radialGradient>
   </defs>
-  <circle cx="64" cy="64" r="60" fill="url(#ball)"/>
+
+  <!-- Círculo base -->
+  <circle cx="64" cy="64" r="60" fill="url(#shine)"/>
+
   <!-- Pentágono central -->
-  <path d="M64 34 L74 41 L70 54 L58 54 L54 41 Z" fill="#0a0a0a"/>
-  <!-- Pentágonos alrededor -->
-  <path d="M74 41 L90 47 L88 62 L74 62 L70 54 Z" fill="#0a0a0a"/>
-  <path d="M54 41 L38 47 L40 62 L54 62 L58 54 Z" fill="#0a0a0a"/>
-  <path d="M70 54 L74 62 L84 74 L76 80 L62 74 L58 54 Z" fill="#0a0a0a" opacity="0.85"/>
-  <path d="M58 54 L62 74 L48 80 L44 74 L54 62 L40 62 Z" fill="#0a0a0a" opacity="0.85"/>
-  <path d="M64 88 L76 80 L84 74 L74 62 L70 54 L58 54 L54 62 L48 74 L44 80 L52 88 Z" fill="none" stroke="#0a0a0a" stroke-width="1.5" opacity="0.3"/>
-  <path d="M64 88 L76 80 L84 74" fill="none" stroke="#0a0a0a" stroke-width="1.5"/>
-  <path d="M64 88 L52 88 L44 80" fill="none" stroke="#0a0a0a" stroke-width="1.5"/>
+  <polygon points="64,38 82,50 76,70 52,70 46,50" fill="#111"/>
+
+  <!-- Líneas de costura desde cada vértice del pentágono hacia el borde -->
+  <line x1="64" y1="38" x2="64" y2="6" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="82" y1="50" x2="115" y2="38" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="76" y1="70" x2="105" y2="95" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="52" y1="70" x2="23" y2="95" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="46" y1="50" x2="13" y2="38" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Pentágonos secundarios (borde) -->
+  <polygon points="64,4 68,10 66,16 62,16 60,10" fill="#111"/>
+  <polygon points="118,35 120,42 116,46 111,43 112,36" fill="#111"/>
+  <polygon points="108,98 102,101 98,97 101,91 107,92" fill="#111"/>
+  <polygon points="20,98 26,101 30,97 27,91 21,92" fill="#111"/>
+  <polygon points="10,35 8,42 12,46 17,43 16,36" fill="#111"/>
+
+  <!-- Borde -->
+  <circle cx="64" cy="64" r="60" fill="none" stroke="#111" stroke-width="2" opacity="0.15"/>
 </svg>
