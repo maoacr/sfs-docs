@@ -59,10 +59,9 @@ El sistema soportará un motor de reglas de precios configurable por el dueño:
 | **Base de datos** | PostgreSQL + PostGIS | Relacional robusta, geolocalización nativa, JSONB para configs dinámicas |
 | **ORM** | Prisma | Schema declarativo (pedagógico), migraciones automáticas, type-safe |
 | **Pagos** | Mercado Pago | Dominancia en Latinoamérica, cuotas, billetera digital |
-| **Auth** | Manual (bcrypt + JWT) | Para aprendizaje profundo de autenticación; refresh tokens, rate limiting |
-| **Monorepo** | pnpm workspaces | Gestión de packages en un solo repo (docs, frontend, backend) |
-| **Hosting** | Supabase (DB + Storage) + Vercel (Next.js + API serverless) | Supabase incluye PostGIS y storage; Vercel es nativo para Next.js |
+| **Notificaciones** | In-app (DB) + Email (Resend) | Doble canal: badge + drawer en la app, emails transaccionales |
 | **Auth** | Manual (bcrypt + JWT) → Supabase Auth (post-MVP) | Aprender fundamentos; migrar a managed cuando esté dominado |
+| **Hosting** | Supabase (DB + Storage) + Vercel (Next.js + API serverless) | Supabase incluye PostGIS y storage; Vercel es nativo para Next.js |
 | **Testing** | Unit + Integration (Vitest + Supertest) | Cobertura de lógica crítica y flujos principales |
 | **Almacenamiento** | Supabase Storage | Fotos de canchas, assets |
 
