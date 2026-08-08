@@ -47,6 +47,10 @@ erDiagram
         string apodo "unique, nullable"
         string codigo_pais "default: +57"
         string telefono "nullable"
+        string instagram "nullable"
+        string tiktok "nullable"
+        string twitter "nullable"
+        string facebook "nullable"
         enum role "OWNER | PLAYER"
         datetime deleted_at "soft delete"
     }
@@ -143,6 +147,10 @@ Tabla única para dueños y jugadores. El campo `role` determina los permisos.
 | `apodo` | `VARCHAR(30)` UNIQUE nullable | Handle único en el sistema — futuras menciones, puntuaciones, transacciones |
 | `codigo_pais` | `VARCHAR(5) DEFAULT '+57'` | Código de país para teléfono |
 | `telefono` | `VARCHAR(15)` nullable | Número sin código de país |
+| `instagram` | `VARCHAR(30)` nullable | Username de Instagram |
+| `tiktok` | `VARCHAR(30)` nullable | Username de TikTok |
+| `twitter` | `VARCHAR(30)` nullable | Username de Twitter/X |
+| `facebook` | `VARCHAR(50)` nullable | Username de Facebook |
 | `role` | `ENUM('OWNER', 'PLAYER')` | Un usuario puede tener un solo rol en MVP |
 | `deleted_at` | `TIMESTAMPTZ` | Soft delete |
 
