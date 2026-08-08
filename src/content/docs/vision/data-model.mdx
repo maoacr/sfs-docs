@@ -28,8 +28,10 @@ Cada tabla de negocio incluye `tenant_id` que referencia al `user.id` del dueño
 
 ```mermaid
 erDiagram
-    User ||--o{ Cancha : "posee (owner)"
+    User ||--o{ Complejo : "posee (owner)"
     User ||--o{ Reserva : "realiza (player)"
+    Complejo ||--o{ Cancha : "tiene"
+    Complejo ||--o{ ComplejoImagen : "tiene"
     Cancha ||--o{ SlotConfig : "tiene"
     Cancha ||--o{ Tarifa : "tiene"
     Cancha ||--o{ Reserva : "recibe"
@@ -55,13 +57,43 @@ erDiagram
         datetime deleted_at "soft delete"
     }
 
+    Complejo {
+        uuid id PK
+        uuid tenant_id FK
+        string nombre
+        string tipo_via "Calle | Carrera | Diagonal..."
+        string numero_via
+        string numero_sec "nullable"
+        string complemento "nullable"
+        string ciudad
+        string departamento
+        float lat "nullable"
+        float lng "nullable"
+        string telefono "nullable"
+        string email "nullable"
+        string instagram "nullable"
+        string tiktok "nullable"
+        string twitter "nullable"
+        string facebook "nullable"
+        string descripcion "nullable"
+        datetime deleted_at "soft delete"
+    }
+
+    ComplejoImagen {
+        uuid id PK
+        uuid complejo_id FK
+        string url
+        int orden
+        bool principal
+    }
+
     Cancha {
         uuid id PK
         uuid tenant_id FK "owner user.id"
+        uuid complejo_id FK
         string nombre
         enum tipo "F5 | F6 | F7 | F8 | F9 | F11"
         int capacidad
-        string direccion
         point ubicacion "PostGIS geometry"
         string descripcion
         jsonb servicios "['vestidores','cafeteria','parqueadero']"
@@ -160,6 +192,47 @@ Tabla única para dueños y jugadores. El campo `role` determina los permisos.
 - `codigo_pais` por defecto `+57` (Colombia): target primario, extensible a otros países.
 - UUID en vez de autoincrement: no expone cuántos usuarios hay, imposible iterar IDs.
 
+### `complejos`
+
+Agrupa canchas bajo un mismo espacio físico. Un dueño puede tener múltiples complejos.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `tenant_id` | `UUID` FK → `users.id` | El dueño |
+| `nombre` | `VARCHAR(100)` | "Fútbol Center El Campito" |
+| `tipo_via` | `VARCHAR(20) DEFAULT 'Calle'` | Calle, Carrera, Diagonal, Transversal, Avenida, Autopista |
+| `numero_via` | `VARCHAR(10)` | Número principal (ej: "123") |
+| `numero_sec` | `VARCHAR(10)` nullable | Número secundario después del # (ej: "45-67") |
+| `complemento` | `VARCHAR(100)` nullable | Apto, Local, Interior, etc. |
+| `ciudad` | `VARCHAR(100)` | |
+| `departamento` | `VARCHAR(100)` | |
+| `lat` | `FLOAT` nullable | Coordenadas para mapa |
+| `lng` | `FLOAT` nullable | |
+| `telefono` | `VARCHAR(20)` nullable | |
+| `email` | `VARCHAR(255)` nullable | |
+| `instagram` | `VARCHAR(30)` nullable | |
+| `tiktok` | `VARCHAR(30)` nullable | |
+| `twitter` | `VARCHAR(30)` nullable | |
+| `facebook` | `VARCHAR(50)` nullable | |
+| `descripcion` | `TEXT` nullable | |
+| `deleted_at` | `TIMESTAMPTZ` | |
+
+**Decisiones**:
+- Dirección fragmentada al estilo colombiano (`tipo_via + numero_via + # + complemento`) para geocoding preciso con Nominatim.
+- Redes sociales por complejo: cada espacio deportivo maneja sus propias cuentas.
+- `lat`/`lng` como FLOAT para uso directo en mapas (Google Maps, Waze). La columna `ubicacion` (PostGIS geometry) queda para futuras búsquedas geoespaciales.
+
+### `complejo_imagenes`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `complejo_id` | `UUID` FK → `complejos.id` | |
+| `url` | `VARCHAR(500)` | URL pública de Supabase Storage |
+| `orden` | `INT DEFAULT 0` | Orden en la galería |
+| `principal` | `BOOLEAN DEFAULT false` | Imagen principal del complejo |
+
 ### `canchas`
 
 El corazón del negocio. Cada dueño configura sus espacios.
@@ -168,10 +241,10 @@ El corazón del negocio. Cada dueño configura sus espacios.
 |---|---|---|
 | `id` | `UUID` PK | |
 | `tenant_id` | `UUID` FK → `users.id` | El dueño |
+| `complejo_id` | `UUID` FK → `complejos.id` | Complejo al que pertenece |
 | `nombre` | `VARCHAR(100)` | "Cancha Principal", "Fútbol 7 Techada" |
 | `tipo` | `ENUM('F5','F6','F7','F8','F9','F11')` | Cantidad de jugadores |
 | `capacidad` | `INT` | Jugadores totales (ej: 10 para F5, 14 para F7) |
-| `direccion` | `TEXT` | Dirección física |
 | `ubicacion` | `GEOMETRY(POINT)` | Lat/Lng para PostGIS. Índice espacial. |
 | `descripcion` | `TEXT` | Descripción libre |
 | `servicios` | `JSONB` | `["vestidores", "cafeteria", "parqueadero"]` |
