@@ -1,17 +1,51 @@
 ---
 title: API REST
-description: Endpoints disponibles en el MVP.
+description: Endpoints disponibles en el MVP con seguridad implementada.
 ---
 
 Todas las rutas que no son públicas requieren autenticación vía cookie `sfs_token` (JWT). Las rutas de administración requieren además rol `OWNER`.
 
+## Capas de seguridad
+
+Cada request a la API pasa por las siguientes capas en orden:
+
+| Capa | Qué hace | Error |
+|------|----------|-------|
+| **Rate limiting** | Limita requests por IP/endpoint en ventana de tiempo | `429 Too Many Requests` |
+| **CSRF** | Verifica token CSRF en métodos POST/PUT/PATCH/DELETE | `403 Forbidden` |
+| **Auth (JWT)** | Verifica cookie `sfs_token` y rol requerido | `401 Unauthorized` / `403 Forbidden` |
+| **Zod validation** | Valida body y query params contra schemas tipados | `400 Bad Request` + detalles |
+| **Tenant isolation** | Filtro automático de `tenantId` en todas las queries multi-tenant | Transparente |
+
+### Rate limiting
+
+| Endpoint | Límite | Ventana |
+|----------|--------|---------|
+| `POST /api/auth/login` | 5 | 1 minuto |
+| `POST /api/auth/register` | 3 | 1 minuto |
+| `POST /api/reservas` | 10 | 1 minuto |
+| `GET /api/disponibilidad` | 60 | 1 minuto |
+| Resto de endpoints | 100 | 1 minuto |
+
+Headers de respuesta: `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
+
+### CSRF
+
+Los métodos `POST`, `PUT`, `PATCH`, `DELETE` requieren header `X-CSRF-Token` que coincida con la cookie `csrf_token`. El token se obtiene de la respuesta de `GET /api/auth/me` o cualquier GET exitoso.
+
+Excepciones: `POST /api/auth/login` y `POST /api/auth/register` no requieren CSRF (no hay sesión aún).
+
+### Tenant isolation
+
+Todas las queries a modelos multi-tenant (Cancha, Complejo, Reserva, Tarifa, SlotConfig, Promocion) se filtran automáticamente por `tenantId`. No es necesario incluirlo manualmente — el sistema lo inyecta vía Prisma `$extends` con AsyncLocalStorage.
+
 ## Autenticación
 
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| `POST` | `/api/auth/login` | ❌ | Login — devuelve JWT en cookie `sfs_token` |
-| `POST` | `/api/auth/register` | ❌ | Registro — crea usuario y devuelve JWT |
-| `POST` | `/api/auth/logout` | ❌ | Cierra sesión — borra cookies |
+| Método | Ruta | Auth | Rate Limit | Descripción |
+|---|---|---|---|---|
+| `POST` | `/api/auth/login` | ❌ | 5/min | Login — devuelve JWT en cookie `sfs_token` |
+| `POST` | `/api/auth/register` | ❌ | 3/min | Registro — crea usuario y devuelve JWT |
+| `POST` | `/api/auth/logout` | ❌ | default | Cierra sesión — borra cookies |
 
 ### Login
 
@@ -33,6 +67,19 @@ Content-Type: application/json
     "apodo": "carlitosgomez",
     "role": "OWNER"
   }
+}
+
+// 400 Bad Request — datos inválidos
+{
+  "error": "Datos inválidos",
+  "details": [
+    { "path": "email", "message": "Email inválido" }
+  ]
+}
+
+// 429 Too Many Requests — rate limit excedido
+{
+  "error": "Demasiadas solicitudes. Intenta de nuevo más tarde."
 }
 ```
 
@@ -64,19 +111,32 @@ Content-Type: application/json
     "role": "PLAYER"
   }
 }
+
+// 409 Conflict — email duplicado
+{
+  "error": "El email ya está registrado"
+}
 ```
+
+**Validaciones**:
+- `password`: 8-72 caracteres
+- `apodo`: 3-30 caracteres, solo letras y números
+- `primerNombre`: 1-50 caracteres, requerido
+- `apellidos`: 1-100 caracteres, requerido
+- `role`: "OWNER" o "PLAYER", requerido
+- `codigoPais`: default "+57"
 
 ## Canchas
 
 Todas requieren cookie `sfs_token` con rol `OWNER`.
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET` | `/api/canchas` | Lista canchas del owner |
-| `POST` | `/api/canchas` | Crea una cancha |
-| `GET` | `/api/canchas/[id]` | Detalle de una cancha |
-| `PUT` | `/api/canchas/[id]` | Actualiza datos de la cancha |
-| `DELETE` | `/api/canchas/[id]` | Soft delete |
+| Método | Ruta | CSRF | Descripción |
+|---|---|---|---|
+| `GET` | `/api/canchas` | ❌ | Lista canchas del owner |
+| `POST` | `/api/canchas` | ✅ | Crea una cancha |
+| `GET` | `/api/canchas/[id]` | ❌ | Detalle de una cancha |
+| `PUT` | `/api/canchas/[id]` | ✅ | Actualiza datos de la cancha |
+| `DELETE` | `/api/canchas/[id]` | ✅ | Soft delete |
 
 ### Query params para GET
 
@@ -88,49 +148,56 @@ Todas requieren cookie `sfs_token` con rol `OWNER`.
 
 ```json
 POST /api/canchas
+X-CSRF-Token: <token>
 
 {
   "nombre": "Fútbol 7 Techada",
   "tipo": "F7",
   "capacidad": 14,
-  "direccion": "Carrera 45 #67-89, Medellín",
+  "complejoId": "uuid",
   "descripcion": "Cancha techada con iluminación LED",
   "servicios": ["vestidores", "cafeteria", "iluminacion"],
   "duracionSlotMinutos": 60
 }
 ```
 
+**Validaciones**:
+- `tipo`: "F5", "F6", "F7", "F8", "F9", o "F11"
+- `capacidad`: 2-30
+- `duracionSlotMinutos`: 30-240 (default 60)
+- `complejoId`: UUID válido, debe pertenecer al owner
+
 ## Slots (horarios)
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET` | `/api/canchas/[id]/slots` | Lista slots de la cancha |
-| `POST` | `/api/canchas/[id]/slots` | Crea un slot |
-| `PUT` | `/api/canchas/[id]/slots/[slotId]` | Actualiza horario del slot |
-| `DELETE` | `/api/canchas/[id]/slots/[slotId]` | Elimina un slot |
+| Método | Ruta | CSRF | Descripción |
+|---|---|---|---|
+| `GET` | `/api/canchas/[id]/slots` | ❌ | Lista slots de la cancha |
+| `POST` | `/api/canchas/[id]/slots` | ✅ | Crea un slot |
+| `PUT` | `/api/canchas/[id]/slots/[slotId]` | ✅ | Actualiza horario del slot |
+| `DELETE` | `/api/canchas/[id]/slots/[slotId]` | ✅ | Elimina un slot |
 
 ## Tarifas (precios)
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/api/canchas/[id]/tarifas` | Crea una tarifa |
-| `PUT` | `/api/canchas/[id]/tarifas/[tarifaId]` | Actualiza tarifa |
-| `DELETE` | `/api/canchas/[id]/tarifas/[tarifaId]` | Elimina tarifa |
+| Método | Ruta | CSRF | Descripción |
+|---|---|---|---|
+| `POST` | `/api/canchas/[id]/tarifas` | ✅ | Crea una tarifa |
+| `PUT` | `/api/canchas/[id]/tarifas/[tarifaId]` | ✅ | Actualiza tarifa |
+| `DELETE` | `/api/canchas/[id]/tarifas/[tarifaId]` | ✅ | Elimina tarifa |
 
 ## Sync (offline)
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/api/sync` | Recibe operaciones pendientes del Sync Engine offline |
+| Método | Ruta | CSRF | Descripción |
+|---|---|---|---|
+| `POST` | `/api/sync` | ✅ | Recibe operaciones pendientes del Sync Engine offline |
 
 ## Reservas
 
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| `GET` | `/api/reservas` | ✅ | Lista reservas (owner ve sus canchas, player ve las propias) |
-| `POST` | `/api/reservas` | ✅ | Crea una reserva (estado: `PENDIENTE_PAGO`) |
-| `PUT` | `/api/reservas/[id]` | ✅ | Cambia estado (`CANCELADA`, `COMPLETADA`) |
-| `POST` | `/api/reservas/liberar-expiradas` | ❌ | Libera reservas `PENDIENTE_PAGO` que excedieron TTL (15 min) |
+| Método | Ruta | Auth | Rate Limit | CSRF | Descripción |
+|---|---|---|---|---|---|
+| `GET` | `/api/reservas` | ✅ | default | ❌ | Lista reservas (owner ve sus canchas, player ve las propias) |
+| `POST` | `/api/reservas` | ✅ | 10/min | ✅ | Crea una reserva (estado: `PENDIENTE_PAGO`) |
+| `PUT` | `/api/reservas/[id]` | ✅ | default | ✅ | Cambia estado (`CANCELADA`, `COMPLETADA`) |
+| `POST` | `/api/reservas/liberar-expiradas` | ❌ | default | ❌ | Libera reservas `PENDIENTE_PAGO` que excedieron TTL (15 min) |
 
 ### GET query params
 
@@ -143,19 +210,28 @@ POST /api/canchas
 
 ```json
 POST /api/reservas
+X-CSRF-Token: <token>
 
 {
   "canchaId": "uuid",
-  "slotInicio": "2026-08-10T18:00:00",
-  "slotFin": "2026-08-10T19:00:00"
+  "slotInicio": "2026-08-10T18:00:00Z",
+  "slotFin": "2026-08-10T19:00:00Z"
+}
+
+// OWNER puede incluir:
+{
+  "canchaId": "uuid",
+  "slotInicio": "2026-08-10T18:00:00Z",
+  "slotFin": "2026-08-10T19:00:00Z",
+  "playerId": "uuid"
 }
 ```
 
 ## Disponibilidad
 
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| `GET` | `/api/disponibilidad` | ✅ | Busca canchas disponibles con slots libres/ocupados |
+| Método | Ruta | Auth | Rate Limit | Descripción |
+|---|---|---|---|---|
+| `GET` | `/api/disponibilidad` | ✅ | 60/min | Busca canchas disponibles con slots libres/ocupados |
 
 ### Query params
 
@@ -166,23 +242,27 @@ POST /api/reservas
 
 ## Notificaciones
 
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| `GET` | `/api/notificaciones` | ✅ | Lista notificaciones del usuario |
-| `GET` | `/api/notificaciones?noLeidas=true` | ✅ | Cuenta notificaciones no leídas |
-| `PATCH` | `/api/notificaciones` | ✅ | `{ id }` marca una como leída, `{ todas: true }` marca todas |
+| Método | Ruta | Auth | CSRF | Descripción |
+|---|---|---|---|---|
+| `GET` | `/api/notificaciones` | ✅ | ❌ | Lista notificaciones del usuario |
+| `GET` | `/api/notificaciones?noLeidas=true` | ✅ | ❌ | Cuenta notificaciones no leídas |
+| `PATCH` | `/api/notificaciones` | ✅ | ✅ | `{ id }` marca una como leída, `{ todas: true }` marca todas |
 
 ## Perfil
 
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| `GET` | `/api/auth/me` | ✅ | Obtiene perfil del usuario autenticado |
-| `PATCH` | `/api/auth/me` | ✅ | Actualiza perfil (nombre, apodo, teléfono)
+| Método | Ruta | Auth | CSRF | Descripción |
+|---|---|---|---|---|
+| `GET` | `/api/auth/me` | ✅ | ❌ | Obtiene perfil + devuelve CSRF token |
+| `PATCH` | `/api/auth/me` | ✅ | ✅ | Actualiza perfil (nombre, apodo, teléfono) |
 
 ## Seguridad
 
-- **Tenant isolation**: todas las queries filtran por `tenantId` extraído del JWT.
-- **Cookies HttpOnly**: `sfs_token` y `sfs_refresh` no son accesibles desde JavaScript.
+- **Tenant isolation**: automática vía Prisma `$extends` con AsyncLocalStorage. Todas las queries a modelos multi-tenant se filtran por `tenantId` sin intervención del developer.
+- **Cookies HttpOnly + SameSite=strict**: `sfs_token` y `sfs_refresh` no son accesibles desde JavaScript ni se envían en requests cross-site.
 - **bcrypt**: contraseñas hasheadas con 12 rounds.
 - **JWT**: access token expira en 15 min, refresh token en 7 días.
-- **Rate limiting**: pendiente de implementar.
+- **Rate limiting**: implementado con sliding window en memoria. Configurable por endpoint.
+- **CSRF**: double-submit cookie pattern. Requerido para todos los métodos unsafe (excepto login/register).
+- **Input validation**: Zod v4 en todas las rutas refactorizadas. Valida tipos, rangos, formatos y reglas de negocio.
+
+Para más detalles, consultá la [Guía de Seguridad](/guides/security).

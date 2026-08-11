@@ -1,0 +1,238 @@
+---
+title: Seguridad del Backend
+description: Arquitectura de seguridad implementada en SFS — rate limiting, CSRF, tenant isolation, validación de inputs, y testing.
+---
+
+SFS implementa seguridad en capas. Cada request atraviesa múltiples verificaciones antes de llegar a la lógica de negocio. Ninguna capa es opcional — si una falla, el request se rechaza.
+
+## Orden de ejecución
+
+```
+Request entrante
+  │
+  ├─ 1. Rate limiting ──→ ¿Excede el límite? → 429 Too Many Requests
+  │
+  ├─ 2. CSRF ──→ ¿Método unsafe sin token? → 403 Forbidden
+  │
+  ├─ 3. Auth (JWT) ──→ ¿No autenticado? → 401 Unauthorized
+  │                   └─→ ¿Rol incorrecto? → 403 Forbidden
+  │
+  ├─ 4. Zod validation ──→ ¿Body/query inválido? → 400 Bad Request
+  │
+  ├─ 5. Tenant context ──→ Inyecta userId en AsyncLocalStorage
+  │
+  └─ 6. Handler ──→ Lógica de negocio (con tenant isolation automática)
+```
+
+---
+
+## 1. Rate Limiting
+
+### Mecanismo
+
+Sliding window en memoria. Cada request se cuenta por IP (vía `x-forwarded-for`) en una ventana de tiempo configurable. Si se excede el límite, el request se rechaza con `429`.
+
+### Implementación
+
+```typescript
+// src/lib/rate-limit.ts
+export const RATE_LIMITS = {
+  AUTH_LOGIN:      { maxRequests: 5,  windowMs: 60_000 },  // 5 intentos/min
+  AUTH_REGISTER:   { maxRequests: 3,  windowMs: 60_000 },  // 3 registros/min
+  STRICT:          { maxRequests: 10, windowMs: 60_000 },  // 10/min
+  DISPONIBILIDAD:  { maxRequests: 60, windowMs: 60_000 },  // 1 query/seg
+  DEFAULT:         { maxRequests: 100, windowMs: 60_000 }, // 100/min
+};
+```
+
+### Headers
+
+Cada response incluye:
+- `X-RateLimit-Remaining`: requests restantes en esta ventana
+- `X-RateLimit-Reset`: timestamp Unix de cuándo se reinicia la ventana
+
+### Limitación
+
+El rate limiting actual está en memoria. En producción con múltiples instancias (serverless en Vercel), se debe migrar a Redis o Vercel KV para compartir el estado entre instancias.
+
+---
+
+## 2. CSRF Protection
+
+### Mecanismo
+
+Double-submit cookie pattern: el servidor genera un token aleatorio y lo envía como cookie (`csrf_token`) Y como header (`X-CSRF-Token`). Para operaciones que modifican datos, el cliente debe reenviar el header y debe coincidir con la cookie.
+
+### Cookies
+
+| Cookie | HttpOnly | SameSite | Secure | Propósito |
+|--------|----------|----------|--------|-----------|
+| `sfs_token` | ✅ | strict | prod | JWT access token |
+| `sfs_refresh` | ✅ | strict | prod | JWT refresh token |
+| `csrf_token` | ❌ | strict | prod | Token CSRF (legible por JS) |
+
+`csrf_token` NO es HttpOnly porque el frontend necesita leerlo para enviarlo como header.
+
+### Obtención del token
+
+El token CSRF se genera en `GET /api/auth/me` y se envía como cookie + header. El frontend debe cachearlo y enviarlo en cada request unsafe.
+
+### Excepciones
+
+`POST /api/auth/login` y `POST /api/auth/register` no requieren CSRF porque no hay sesión establecida aún.
+
+---
+
+## 3. Tenant Isolation
+
+### Mecanismo
+
+Prisma `$extends` con [AsyncLocalStorage](https://nodejs.org/api/async_context.html) de Node.js. Cuando un usuario se autentica, su `userId` se almacena en un contexto asíncrono por request. Cada query de Prisma a modelos multi-tenant recibe automáticamente el filtro `tenantId`.
+
+### Modelos multi-tenant
+
+Cancha, Complejo, Reserva, ComplejoImagen, ImagenCancha, SlotConfig, Tarifa, Promocion.
+
+### Modelos sin tenant
+
+User, Notificacion, Pago (no tienen `tenantId` en el schema).
+
+### Qué hace el middleware
+
+```typescript
+// En create: inyecta tenantId automáticamente
+prisma.cancha.create({ data: { nombre: "F7" } })
+// → prisma.cancha.create({ data: { nombre: "F7", tenantId: "abc-123" } })
+
+// En findMany: añade filtro where
+prisma.cancha.findMany()
+// → prisma.cancha.findMany({ where: { tenantId: "abc-123" } })
+
+// Si el developer ya incluyó tenantId, NO lo duplica
+prisma.cancha.findMany({ where: { tenantId: "otro-id" } })
+// → respeta el filtro explícito
+```
+
+### Seguridad
+
+Si un developer se olvida de filtrar por `tenantId`, el middleware lo inyecta automáticamente. Esto elimina la clase de bugs más peligrosa en SaaS: leaks de datos entre tenants.
+
+---
+
+## 4. Input Validation (Zod)
+
+### Mecanismo
+
+Cada API route que usa el wrapper `apiHandler()` valida el body y query params contra schemas Zod antes de ejecutar la lógica de negocio.
+
+### Schemas implementados
+
+| Schema | Valida |
+|--------|--------|
+| `loginSchema` | email (formato), password (requerido) |
+| `registerSchema` | email, password (8-72 chars), nombres, apodo (3-30 alfanumérico), role |
+| `createCanchaSchema` | nombre, tipo (F5-F11), capacidad (2-30), complejoId (UUID), servicios, duración |
+| `createComplejoSchema` | nombre, dirección, coordenadas (lat -90/90, lng -180/180) |
+| `createSlotSchema` | diaSemana (0-6), horaApertura/Cierre (HH:MM) |
+| `createTarifaSchema` | precioBase (≥0), factor (0.01-10) |
+| `createReservaSchema` | canchaId (UUID), slotInicio/Fin (ISO 8601) |
+| `updateProfileSchema` | Campos opcionales del perfil |
+
+### Respuesta de error
+
+```json
+{
+  "error": "Datos inválidos",
+  "details": [
+    { "path": "capacidad", "message": "Capacidad mínima: 2" },
+    { "path": "tipo", "message": "Tipo de cancha inválido" }
+  ]
+}
+```
+
+---
+
+## 5. API Handler Wrapper
+
+Todas las rutas refactorizadas usan `apiHandler()`, que encapsula las 5 capas de seguridad en un solo punto.
+
+### Uso
+
+```typescript
+export const POST = apiHandler<CreateCanchaInput>(
+  async (_request, _ctx, { body }) => {
+    // Solo lógica de negocio — sin validación, sin auth, sin rate limit
+    const cancha = await prisma.cancha.create({ data: body });
+    return NextResponse.json(cancha, { status: 201 });
+  },
+  {
+    requireAuth: true,           // Requiere JWT
+    requiredRole: "OWNER",       // Solo dueños
+    bodySchema: createCanchaSchema,  // Validación Zod
+    // rateLimit usa DEFAULT (100/min) por omisión
+  }
+);
+```
+
+### Opciones
+
+| Opción | Default | Descripción |
+|--------|---------|-------------|
+| `requireAuth` | `false` | Requiere cookie JWT válida |
+| `requiredRole` | — | `"OWNER"` o `"PLAYER"` |
+| `bodySchema` | — | Schema Zod para validar `request.json()` |
+| `querySchema` | — | Schema Zod para validar query params |
+| `rateLimit` | `DEFAULT` | Config de rate limit |
+| `requireCsrf` | `true` | Requiere token CSRF en unsafe methods |
+
+---
+
+## 6. Testing
+
+### Stack
+
+- **Runner**: Vitest 4
+- **Entorno**: jsdom
+- **Assertions**: @testing-library/jest-dom
+- **React**: @testing-library/react, @vitejs/plugin-react
+
+### Tests actuales
+
+14 tests en `src/lib/schemas.test.ts` — cobertura completa de todos los schemas Zod:
+
+```
+✓ loginSchema valida email y password requeridos
+✓ loginSchema acepta credenciales válidas
+✓ registerSchema rechaza password corto
+✓ registerSchema acepta datos válidos
+✓ registerSchema rechaza apodo inválido
+✓ createCanchaSchema rechaza tipo inválido
+✓ createCanchaSchema acepta datos válidos
+✓ createComplejoSchema acepta datos mínimos
+✓ createComplejoSchema rechaza lat/lng fuera de rango
+✓ createReservaSchema rechaza fechas inválidas
+✓ createReservaSchema acepta datos válidos
+✓ createSlotSchema rechaza día inválido
+✓ createSlotSchema acepta slot válido
+✓ createTarifaSchema rechaza precio negativo
+✓ createTarifaSchema acepta tarifa válida
+```
+
+### Ejecutar
+
+```bash
+pnpm test          # una sola vez
+pnpm test:watch    # modo watch
+```
+
+---
+
+## Próximos pasos de seguridad
+
+- [ ] **Secretos**: rotar `JWT_SECRET` y `JWT_REFRESH_SECRET` periódicamente
+- [ ] **Rate limiting distribuido**: migrar a Redis/Vercel KV para producción
+- [ ] **Security headers**: CSP, HSTS, X-Frame-Options, X-Content-Type-Options
+- [ ] **Webhook HMAC**: validar firma de MercadoPago en webhooks entrantes
+- [ ] **Audit logging**: registrar acciones críticas (reservas, pagos, cambios de precio)
+- [ ] **Row-Level Security (RLS)**: habilitar RLS en Supabase como segunda capa de defensa
+- [ ] **2FA**: autenticación de dos factores para dueños

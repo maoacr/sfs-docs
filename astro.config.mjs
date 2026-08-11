@@ -27,6 +27,7 @@ export default defineConfig({
 						{ label: 'Modelo de Datos', slug: 'vision/data-model' },
 						{ label: 'Flujo de Reservas', slug: 'vision/flujo-reservas' },
 						{ label: 'Modo Offline (PWA)', slug: 'vision/offline-pwa' },
+						{ label: 'Roadmap Técnico', slug: 'vision/roadmap' },
 						{
 							label: 'MVP',
 							collapsed: false,
@@ -45,6 +46,7 @@ export default defineConfig({
 				{
 					label: 'Guías',
 					items: [
+						{ label: 'Seguridad', slug: 'guides/security' },
 						{ label: 'Email (Resend)', slug: 'guides/email' },
 						{ label: 'Zonas Horarias', slug: 'guides/timezone' },
 					],
