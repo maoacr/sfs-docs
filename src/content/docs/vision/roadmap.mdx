@@ -1,0 +1,136 @@
+---
+title: Roadmap Técnico
+description: Plan de implementación por fases para SFS — desde los cimientos de seguridad hasta la PWA completa.
+---
+
+El desarrollo de SFS sigue un orden estricto de fases. Cada fase es prerrequisito de la siguiente.
+
+## Fase 0: Blindaje del Backend
+
+**Estado**: 🟢 Completada — 2026-08-09
+
+Establece los cimientos de seguridad, validación y testing. Sin esto, todo lo demás es frágil.
+
+| Tarea | Descripción | Prioridad | Estado |
+|---|---|---|---|
+| **0.1** | Zod en todas las API routes — validación de inputs en runtime | P0 | ✅ |
+| **0.2** | Rate limiting — protección contra abuso y brute force | P0 | ✅ |
+| **0.3** | Prisma $extends de tenant isolation — filtro automático por `tenantId` | P0 | ✅ |
+| **0.4** | CSRF protection — double-submit cookie + SameSite=strict | P0 | ✅ |
+| **0.5** | Test suite inicial — Vitest + 14 tests de schemas | P0 | ✅ |
+
+**Verificación**:
+- `pnpm test` → 14/14 pasan (1.9s)
+- `pnpm tsc --noEmit` → 0 errores
+- Rate limiting responde 429 al exceder límite
+- Toda query multi-tenant incluye `tenantId` automáticamente vía AsyncLocalStorage
+- CSRF requerido para POST/PUT/PATCH/DELETE (excepto login/register)
+
+**Stack agregado**: zod, vitest, @testing-library/react, nanoid, @prisma/client (workspace root)
+
+**Archivos clave**: `src/lib/schemas.ts`, `src/lib/api-handler.ts`, `src/lib/tenant-middleware.ts`, `src/lib/csrf.ts`, `src/lib/rate-limit.ts`
+
+**Docs**: [Guía de Seguridad](/guides/security)
+
+---
+
+## Fase 1: El Corazón del Negocio
+
+**Estado**: 🟢 Completada — 2026-08-10
+
+Implementa la lógica de pricing, pagos con MercadoPago Split 1:N (85/15), TTL real, políticas de cancelación y emails transaccionales. Incluye modelo de Partidos y Equipos para pagos compartidos.
+
+| Tarea | Descripción | Prioridad | Estado |
+|---|---|---|---|
+| **1.1** | Motor de precios dinámicos — `tarifas` + `promociones` → precio final | P0 | ✅ |
+| **1.2** | MercadoPago Split Payments 1:N + Webhooks con HMAC | P0 | ✅ |
+| **1.3** | TTL de reservas — limpieza oportunista + Vercel Cron cada 5 min | P0 | ✅ |
+| **1.4** | Políticas de cancelación y reembolso configurables por complejo | P0 | ✅ |
+| **1.5** | Emails transaccionales — Resend con templates HTML | P0 | ✅ |
+| **1.6** | Modelo de Partidos — pagos compartidos entre jugadores | P1 | ✅ |
+| **1.7** | Modelo de Equipos — CRUD, invitar miembros, asignar a partidos | P1 | ✅ |
+| **1.8** | Calendario público de partidos (seed para tournaments) | P2 | ✅ |
+
+**Verificación**:
+- `pnpm test` → 33/33 pasan
+- `pnpm tsc --noEmit` → 0 errores
+- Motor de precios con match de tarifa específica + promociones
+- Split MP 85/15 creado automáticamente al pagar
+- Pago mínimo 50%, bloqueo por saldo pendiente
+- Cancelación con políticas configurables por complejo + refund MP
+- Emails para PAGO_PARCIAL, RECIBO_PAGO, y notificaciones al dueño
+
+**Stack agregado**: mercadopago, Vercel Cron
+
+**Archivos clave**: `src/lib/pricing.ts`, `src/lib/mercadopago.ts`, `src/app/api/webhooks/mercadopago/`, `src/app/api/reservas/[id]/pagar/`, `src/app/player/reservar/[id]/`, `vercel.json`
+
+---
+
+## Fase 2: Blindaje Legal y Seguridad Avanzada
+
+**Estado**: 🔴 Pendiente (depende de Fase 1)
+
+Cumplimiento de normativa colombiana (Ley 1581, facturación electrónica DIAN), security headers, logging y auditoría.
+
+| Tarea | Descripción | Prioridad |
+|---|---|---|
+| **2.1** | Política de tratamiento de datos personales + consentimiento explícito | P0 |
+| **2.2** | Términos y Condiciones con disclaimer de presencialidad | P0 |
+| **2.3** | Estrategia de facturación electrónica | P0 |
+| **2.4** | Security headers — CSP, HSTS, X-Frame-Options | P1 |
+| **2.5** | Logging y auditoría de acciones críticas | P1 |
+
+**Goals de la fase**:
+- Registro de usuario incluye política de datos y consentimiento explícito
+- Headers de seguridad presentes en todas las responses
+- Log de todas las acciones críticas (reservas, pagos, cambios de precio)
+- Estrategia de facturación definida y documentada
+
+---
+
+## Fase 3: Performance y SEO para Escala Nacional
+
+**Estado**: 🔴 Pendiente (depende de Fase 1)
+
+Optimización para que SFS sea descubrible en Google y responda rápido con miles de usuarios.
+
+| Tarea | Descripción | Prioridad |
+|---|---|---|
+| **3.1** | Caché Redis para consultas de disponibilidad (TTL 30-60s) | P0 |
+| **3.2** | Dynamic metadata + JSON-LD structured data para cada cancha | P0 |
+| **3.3** | Optimización de imágenes con Next.js Image (`placeholder="blur"`, LCP) | P1 |
+| **3.4** | PostGIS en tabla canchas — búsqueda geoespacial real | P1 |
+| **3.5** | API client tipado — contrato entre frontend y backend | P1 |
+
+**Goals de la fase**:
+- Lighthouse > 90 en mobile para páginas principales
+- Google indexa correctamente cada cancha con rich snippets
+- `/api/disponibilidad` responde en < 200ms con 500+ canchas
+
+---
+
+## Fase 4: Offline, PWA y Experiencia Móvil
+
+**Estado**: 🔴 Pendiente (depende de Fase 1)
+
+Sincronización offline para dueños, PWA instalable, y notificaciones push.
+
+| Tarea | Descripción | Prioridad |
+|---|---|---|
+| **4.1** | Sync Engine offline — Dexie.js + Service Worker + conflict resolution | P0 |
+| **4.2** | PWA instalable — manifest, íconos, splash screen | P1 |
+| **4.3** | Push notifications — recordatorios, TTL, promociones | P2 |
+
+**Goals de la fase**:
+- Dueño crea reservas sin conexión, se sincronizan al reconectar
+- App instalable desde el navegador con experiencia nativa
+- Notificaciones push para eventos críticos
+
+---
+
+## Principios
+
+- **Nunca asumir, siempre preguntar** — cada decisión de tradeoff se consulta
+- **Verificar sobre asumir** — claims técnicos se validan con evidencia
+- **Fase completada = fase verificada** — cada fase tiene criterios de aceptación
+- **Documentación viva** — este roadmap se actualiza al completar cada tarea
