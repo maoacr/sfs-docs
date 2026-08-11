@@ -1,0 +1,167 @@
+---
+title: MercadoPago
+description: Configuración de MercadoPago para pagos — sandbox, producción, webhooks y split payments.
+---
+
+SFS usa **MercadoPago Checkout Pro** con **Split Payments 1:N** para procesar pagos de reservas. El 85% va al dueño de la cancha y el 15% es comisión de la plataforma.
+
+## Requisitos
+
+1. Cuenta de desarrollador en [MercadoPago Developers](https://www.mercadopago.com.co/developers/panel)
+2. Una aplicación creada en el panel
+3. Credenciales de prueba (sandbox) y/o producción
+
+## Variables de entorno
+
+```bash
+# .env
+MP_ACCESS_TOKEN="APP_USR-xxx"   # Access token de la aplicación
+MP_PUBLIC_KEY="APP_USR-xxx"     # Public key de la aplicación
+MP_WEBHOOK_SECRET="random-string"  # Secreto para verificar webhooks (lo generás vos)
+```
+
+| Variable | Descripción |
+|---|---|
+| `MP_ACCESS_TOKEN` | Token de acceso del servidor. Prefijo `TEST-` para sandbox, `APP_USR-` para producción |
+| `MP_PUBLIC_KEY` | Llave pública para el frontend. Mismo prefijo que el access token |
+| `MP_WEBHOOK_SECRET` | String aleatorio que vos definís. Se usa para verificar que los webhooks vienen de MP (HMAC-SHA256) |
+
+## Sandbox (desarrollo)
+
+### 1. Obtener credenciales de prueba
+
+Panel MP → Tu aplicación → **Credenciales de prueba**:
+- **Public Key**: `TEST-xxxxxxxx-xxxx-...`
+- **Access Token**: `TEST-xxxxxxxxxxxx-...`
+
+### 2. Crear usuarios de prueba
+
+Panel MP → Tu aplicación → **Cuentas de prueba**. Necesitás crear **dos** usuarios:
+
+| Rol | Para qué |
+|---|---|
+| **Vendedor (Seller)** | Genera las credenciales. El User ID del seller debe coincidir con el sufijo del Access Token |
+| **Comprador (Buyer)** | Es el que usás para pagar en el checkout de MP |
+
+### 3. Tarjetas de prueba
+
+Usá estas tarjetas en el checkout de MP (después de loguearte con el buyer):
+
+| Tarjeta | Número | CVV | Vencimiento | Resultado |
+|---|---|---|---|---|
+| Mastercard | `5254 1336 7440 3564` | `123` | `11/30` | ✅ Aprobada |
+| Visa | `4013 5406 8274 6260` | `123` | `11/30` | ✅ Aprobada |
+| Visa Débito | `4915 1120 5524 6507` | `123` | `11/30` | ✅ Aprobada |
+
+### 4. Probar el flujo
+
+1. Levantá el dev server (`pnpm dev`)
+2. Creá una reserva como player
+3. Al pagar, te redirige al checkout de MercadoPago
+4. **Importante**: si tenés sesión de MP abierta, **cerrala primero**
+5. Logueate con el **buyer test user** (email y contraseña del panel)
+6. Pagá con una tarjeta de prueba
+7. MP te redirige de vuelta y el webhook confirma el pago
+
+:::caution
+Si intentás pagar con tu cuenta real de MP en modo sandbox, MP rechaza la transacción porque no sos un test user. Siempre usá el buyer test user.
+:::
+
+## Webhook
+
+### Configuración
+
+En el panel de MP → Tu aplicación → **Webhooks**:
+
+| Campo | Valor |
+|---|---|
+| URL | `https://tu-dominio.com/api/webhooks/mercadopago` |
+| Eventos | `payment.created`, `payment.updated` |
+
+### Verificación HMAC
+
+Cada webhook de MP incluye un header `x-signature` con formato `ts=...,v1=...`. El sistema verifica:
+
+1. Extrae `ts` y `v1` del header
+2. Construye el payload: `id:{data.id};ts:{ts};`
+3. Calcula HMAC-SHA256 con `MP_WEBHOOK_SECRET`
+4. Compara con `v1` usando `crypto.timingSafeEqual`
+
+Si no hay `MP_WEBHOOK_SECRET` configurado, los webhooks se aceptan sin verificar (solo para desarrollo local).
+
+### Doble verificación
+
+Además del HMAC, el webhook **consulta el pago directamente a la API de MP** antes de actualizar la base de datos. Esto previene webhooks falsificados.
+
+## Split Payments 1:N
+
+Cuando un jugador paga una reserva, el dinero se divide automáticamente:
+
+```
+Pago: $30.000 COP
+  ├── 85% → $25.500 → Cuenta MP del dueño
+  └── 15% → $4.500  → Cuenta MP de SFS (plataforma)
+```
+
+**Fallback**: Si el dueño no tiene configurado su `receiver_id` de MercadoPago, el sistema usa Checkout Pro estándar (todo el pago va a la cuenta de la plataforma). Esto es temporal hasta que los dueños vinculen sus cuentas.
+
+## Flujo de pago completo
+
+```
+1. Player crea reserva
+   └── estado: PENDIENTE_PAGO, TTL: 15 min
+
+2. Player inicia pago (POST /api/reservas/:id/pagar)
+   └── Sistema crea preference/split en MP
+   └── Retorna checkoutUrl
+
+3. Player paga en checkout de MP
+   └── MP procesa el pago
+
+4. MP envía webhook a /api/webhooks/mercadopago
+   └── Sistema verifica HMAC + consulta MP API
+   └── Actualiza pago.estadoPago = APROBADO
+
+5. Sistema actualiza la reserva:
+   ├── Si pagó 100% → CONFIRMADA
+   ├── Si pagó ≥50% → PAGO_PARCIAL (saldo pendiente)
+   └── Notifica a player y dueño (in-app + email)
+
+6. Si PAGO_PARCIAL:
+   └── Player o compañero de partido paga saldo
+   └── (POST /api/reservas/:id/pagar-saldo)
+   └── Cuando saldo = 0 → CONFIRMADA
+```
+
+## Cancelación y reembolso
+
+Cuando se cancela una reserva (`PATCH /api/reservas/:id/cancelar`):
+
+| Escenario | Reembolso |
+|---|---|
+| Jugador cancela dentro del plazo | 100% |
+| Jugador cancela fuera del plazo | 100% − penalización |
+| Dueño cancela | Siempre 100% |
+| Reserva expira (TTL) | 100% de lo pagado |
+
+El reembolso se procesa automáticamente vía la API de MercadoPago (`PaymentRefund`).
+
+## Producción
+
+Para pasar a producción:
+
+1. Cambiá las credenciales a las de **producción** (prefijo `APP_USR-`)
+2. Configurá la URL del webhook con tu dominio real
+3. Asegurate de que `NEXT_PUBLIC_APP_URL` apunte al dominio de producción
+4. Generá un `MP_WEBHOOK_SECRET` seguro (no uses el default)
+5. Los test users y tarjetas de prueba **no funcionan en producción**
+
+## Archivos clave
+
+| Archivo | Qué hace |
+|---|---|
+| `src/lib/mercadopago.ts` | Wrapper del SDK — preferences, splits, refunds, webhook verification |
+| `src/app/api/webhooks/mercadopago/route.ts` | Endpoint que recibe y procesa webhooks de MP |
+| `src/app/api/reservas/[id]/pagar/route.ts` | Inicia pago de reserva |
+| `src/app/api/reservas/[id]/pagar-saldo/route.ts` | Paga saldo pendiente |
+| `src/app/api/reservas/[id]/cancelar/route.ts` | Cancela reserva + reembolso |

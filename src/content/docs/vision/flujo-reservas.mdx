@@ -14,52 +14,115 @@ Jugador selecciona slot
 │ (TTL: 15 min)   │
 └────────┬────────┘
          │
-    ┌────┴────┐
-    │         │
-    ▼         ▼
-┌───────┐  ┌──────────┐
-│Pago OK│  │Timeout /  │
-│       │  │Cancelar   │
-└───┬───┘  └─────┬─────┘
-    │            │
-    ▼            ▼
-┌──────────┐  ┌──────────┐
-│CONFIRMADA│  │CANCELADA │  ← Slot LIBERADO
-└────┬─────┘  └──────────┘
-     │
-     ▼
-┌──────────┐
-│COMPLETADA│  (fecha/hora ya pasó)
-└──────────┘
+    ┌────┴─────────┐
+    │              │
+    ▼              ▼
+┌────────┐  ┌────────────┐
+│Pago 100%│  │Pago ≥ 50%  │
+│         │  │(parcial)   │
+└───┬────┘  └──────┬─────┘
+    │              │
+    ▼              ▼
+┌──────────┐  ┌─────────────┐
+│CONFIRMADA│  │PAGO_PARCIAL │  ← Reserva asegurada, saldo pendiente
+└────┬─────┘  └──────┬──────┘
+     │               │
+     │          ┌────┴────┐
+     │          │         │
+     │          ▼         ▼
+     │     ┌────────┐  ┌──────────┐
+     │     │Saldo   │  │Timeout /  │
+     │     │pagado  │  │Cancelar   │
+     │     └───┬────┘  └─────┬─────┘
+     │         │             │
+     ▼         ▼             ▼
+┌──────────┐  ┌──────────┐  ┌──────────┐
+│CONFIRMADA│  │CONFIRMADA│  │CANCELADA │  ← Slot LIBERADO
+└────┬─────┘  └────┬─────┘  └──────────┘
+     │             │
+     ▼             ▼
+┌──────────────────────┐
+│     COMPLETADA       │  (fecha/hora ya pasó)
+└──────────────────────┘
 ```
 
 ## Reglas de bloqueo
 
 1. **Cuando un jugador selecciona un slot** para reservar, el sistema crea una reserva en estado `PENDIENTE_PAGO`.
 
-2. **El slot queda BLOQUEADO** — ningún otro jugador puede reservar ese mismo horario en esa cancha mientras exista una reserva `PENDIENTE_PAGO` activa.
+2. **El slot queda BLOQUEADO** — ningún otro jugador puede reservar ese mismo horario en esa cancha mientras exista una reserva `PENDIENTE_PAGO` o `PAGO_PARCIAL` activa.
 
-3. **TTL de 15 minutos**: si el pago no se confirma en 15 minutos, la reserva expira y el slot se libera automáticamente.
+3. **TTL de 15 minutos**: si no se confirma al menos un pago parcial en 15 minutos, la reserva expira y el slot se libera automáticamente.
 
-4. **Validación de pago**: la reserva pasa a `CONFIRMADA` cuando:
-   - El jugador completa el pago en MercadoPago (vía webhook), O
+4. **Pago parcial (mínimo 50%)**: el jugador puede pagar entre el 50% y el 100% del monto total. Si paga parcial, la reserva pasa a `PAGO_PARCIAL`.
+
+5. **Saldo pendiente**: el jugador debe completar el pago antes de jugar. Mientras tenga saldo pendiente en cualquier reserva, **no puede crear nuevas reservas**.
+
+6. **Validación de pago**: la reserva pasa a `CONFIRMADA` cuando:
+   - El jugador completa el 100% del pago en MercadoPago (vía webhook), O
    - El dueño marca manualmente el pago como verificado desde su panel
 
-5. **Reservas manuales del dueño**: cuando el owner crea una reserva manual, pasa directamente a estado `CONFIRMADA` (no requiere pago).
+7. **Reservas manuales del dueño**: cuando el owner crea una reserva manual, pasa directamente a estado `CONFIRMADA` (no requiere pago).
+
+## Pago parcial
+
+El jugador puede asegurar su reserva pagando al menos el **50% del monto total**. El resto debe pagarlo antes de jugar.
+
+```
+Monto total: $30.000
+Pago mínimo: $15.000 (50%)
+                │
+    ┌───────────┼───────────┐
+    │           │           │
+    ▼           ▼           ▼
+ $15.000     $20.000     $30.000
+ (50%)       (67%)       (100%)
+    │           │           │
+    ▼           ▼           ▼
+PAGO_PARCIAL PAGO_PARCIAL CONFIRMADA
+saldo: 15k   saldo: 10k   saldo: 0
+```
+
+- **Pago de saldo**: `POST /api/reservas/:id/pagar-saldo` permite pagar el saldo restante
+- **Bloqueo por saldo**: si `saldo_pendiente > 0` en cualquier reserva, el jugador no puede crear nuevas reservas
+
+## Split Payments (MercadoPago)
+
+Los pagos se procesan con **Split 1:N** de MercadoPago:
+- **85%** → cuenta del dueño de la cancha
+- **15%** → comisión de la plataforma SFS
+
+Si el dueño no tiene configurado su `receiver_id` de MercadoPago, el sistema usa Checkout Pro estándar como fallback.
+
+## Políticas de cancelación
+
+Cada complejo configura sus propias reglas:
+
+| Campo | Default | Descripción |
+|---|---|---|
+| `plazo_cancelacion_horas` | 24 | Horas mínimas antes del slot para cancelar sin penalización |
+| `penalizacion_porcentaje` | 0 | % que se descuenta del reembolso si cancela fuera del plazo |
+
+**Reglas**:
+- **Jugador cancela dentro del plazo** → reembolso 100%
+- **Jugador cancela fuera del plazo** → reembolso = 100% − penalización
+- **Dueño cancela** → siempre reembolso 100% al jugador
+- El reembolso se procesa automáticamente vía MercadoPago
 
 ## TTL — Liberación automática
 
-Las reservas en estado `PENDIENTE_PAGO` tienen un tiempo máximo de vida de **15 minutos**. Si el pago no se confirma en ese lapso, la reserva se cancela automáticamente y el slot se libera.
+Las reservas en estado `PENDIENTE_PAGO` o `PAGO_PARCIAL` tienen un tiempo máximo de vida de **15 minutos**. Si no se confirma el pago en ese lapso, la reserva se cancela automáticamente y el slot se libera.
 
-### Mecanismo
+### Mecanismo dual
 
-El TTL usa un enfoque de **limpieza oportunista** — sin cron jobs ni procesos externos:
+1. **Vercel Cron** — se ejecuta cada 5 minutos (`*/5 * * * *`) vía `GET /api/cron/liberar-expiradas`. Es el mecanismo principal en producción.
 
-1. Cada vez que un usuario consulta disponibilidad (`GET /api/disponibilidad`)
-2. Cada vez que se crea una nueva reserva (`POST /api/reservas`)
-3. Manualmente vía `POST /api/reservas/liberar-expiradas`
+2. **Limpieza oportunista** — se ejecuta al:
+   - Consultar disponibilidad (`GET /api/disponibilidad`)
+   - Crear una nueva reserva (`POST /api/reservas`)
+   - Manualmente vía `POST /api/reservas/liberar-expiradas`
 
-En cualquiera de estos casos, el sistema barre las reservas `PENDIENTE_PAGO` con más de 15 minutos de antigüedad y las marca como `CANCELADA`.
+Si la reserva tenía pagos aprobados vía MercadoPago, se reembolsan automáticamente al expirar.
 
 ### Notificaciones de expiración
 
@@ -75,9 +138,12 @@ El sistema de notificaciones cubre todos los cambios de estado:
 |--------|:---:|:---:|
 | Reserva creada | ✅ in-app + email | ❌ |
 | Pago confirmado | ✅ in-app + email | ✅ in-app + email |
+| Pago parcial recibido | ✅ in-app + email | ✅ in-app + email |
 | Reserva cancelada | ✅ in-app + email | ✅ in-app + email |
 | Partido completado | ✅ in-app + email | ❌ |
 | Reserva expirada (TTL) | ✅ in-app + email | ✅ in-app + email |
+| Invitación a equipo | ✅ in-app | ❌ |
+| Invitación a partido | ✅ in-app | ❌ |
 
 ### Canales
 
@@ -97,8 +163,3 @@ WHERE cancha_id = $1
 ```
 
 Si existe un conflicto, la API devuelve `409 Conflict`.
-
-## Próximas mejoras
-
-- [ ] Webhook de MercadoPago: actualización automática de estado al recibir pago
-- [ ] Recordatorio al jugador antes del partido

@@ -255,6 +255,255 @@ X-CSRF-Token: <token>
 | `GET` | `/api/auth/me` | ✅ | ❌ | Obtiene perfil + devuelve CSRF token |
 | `PATCH` | `/api/auth/me` | ✅ | ✅ | Actualiza perfil (nombre, apodo, teléfono) |
 
+## Precio de Cancha
+
+| Método | Ruta | Auth | Rate Limit | Descripción |
+|---|---|---|---|---|
+| `GET` | `/api/canchas/[id]/precio` | ✅ | 60/min | Calcula precio dinámico para fecha/hora + promoción opcional |
+
+### Query params
+
+| Param | Tipo | Descripción |
+|---|---|---|
+| `fecha` | `YYYY-MM-DD` | Fecha del slot |
+| `hora` | `HH:MM` | Hora de inicio |
+| `codigo` | string opcional | Código de promoción |
+
+### Response
+
+```json
+{
+  "canchaId": "uuid",
+  "precioBase": 15000,
+  "factor": 1.3,
+  "descuentoPromocion": 1500,
+  "precioFinal": 18000,
+  "pagoMinimo": 9000,
+  "tarifaAplicada": { "diaSemana": 5, "horaInicio": "18:00", "factor": 1.3 },
+  "promocionAplicada": { "codigo": "AMIGOS10", "tipo": "PORCENTAJE", "valor": 10 }
+}
+```
+
+## Complejos
+
+| Método | Ruta | Auth | CSRF | Descripción |
+|---|---|---|---|---|
+| `GET` | `/api/complejos` | ✅ OWNER | ❌ | Lista complejos del owner |
+| `POST` | `/api/complejos` | ✅ OWNER | ✅ | Crea un complejo |
+| `GET` | `/api/complejos/[id]` | ✅ OWNER | ❌ | Detalle de un complejo |
+| `PUT` | `/api/complejos/[id]` | ✅ OWNER | ✅ | Actualiza complejo |
+| `POST` | `/api/complejos/[id]/imagenes` | ✅ OWNER | ✅ | Sube imágenes del complejo |
+
+## Pagos
+
+Todas requieren autenticación. El pago se procesa vía MercadoPago Checkout Pro con Split 1:N (85% owner, 15% plataforma).
+
+| Método | Ruta | CSRF | Rate Limit | Descripción |
+|---|---|---|---|---|
+| `POST` | `/api/reservas/[id]/pagar` | ❌ | strict | Inicia pago (mínimo 50% del total) |
+| `POST` | `/api/reservas/[id]/pagar-saldo` | ❌ | strict | Paga saldo pendiente de reserva PAGO_PARCIAL |
+| `POST` | `/api/reservas/[id]/confirmar-pago` | ❌ | default | Owner confirma pago manualmente |
+| `PATCH` | `/api/reservas/[id]/cancelar` | ❌ | default | Cancela reserva con política de reembolso |
+
+### Iniciar pago
+
+```json
+POST /api/reservas/:id/pagar
+
+{
+  "monto": 15000
+}
+
+// 200 OK
+{
+  "reservaId": "uuid",
+  "monto": 15000,
+  "checkoutUrl": "https://www.mercadopago.com.co/checkout/v1/redirect?pref_id=...",
+  "tipo": "split"
+}
+
+// 400 — monto insuficiente
+{
+  "error": "El pago mínimo es del 50% (15.000 COP)"
+}
+```
+
+**Reglas**:
+- Monto mínimo: 50% del `montoTotal` (solo en primer pago desde `PENDIENTE_PAGO`)
+- Monto máximo: `saldoPendiente` actual
+- Si el split falla, usa Checkout Pro estándar como fallback
+
+### Pagar saldo
+
+```json
+POST /api/reservas/:id/pagar-saldo
+
+{
+  "monto": 15000
+}
+```
+
+**Reglas**:
+- Solo para reservas en estado `PAGO_PARCIAL`
+- Cualquier jugador del partido asociado puede pagar (pagos compartidos)
+- Monto debe ser > 0 y ≤ saldo pendiente
+
+### Cancelar reserva
+
+```json
+PATCH /api/reservas/:id/cancelar
+
+{
+  "motivo": "No puedo asistir"
+}
+
+// 200 OK
+{
+  "reservaId": "uuid",
+  "estado": "CANCELADA",
+  "porcentajeReembolso": 80,
+  "reembolsos": [{ "pagoId": "uuid", "monto": 12000, "resultado": "ok" }],
+  "motivo": "No puedo asistir"
+}
+```
+
+**Política de reembolso**:
+- Dentro del plazo (`plazoCancelacionHoras`) → 100%
+- Fuera del plazo → 100% − `penalizacionPorcentaje`
+- Dueño cancela → siempre 100%
+- Reembolso automático vía MercadoPago
+
+## Partidos
+
+| Método | Ruta | Auth | CSRF | Descripción |
+|---|---|---|---|---|
+| `GET` | `/api/partidos` | ✅ | ❌ | Lista partidos del usuario (o públicos con filtros) |
+| `POST` | `/api/partidos` | ✅ | ✅ | Crea partido asociado a una reserva |
+| `GET` | `/api/partidos/[id]` | ✅ | ❌ | Detalle de un partido |
+| `PATCH` | `/api/partidos/[id]` | ✅ | ✅ | Actualiza equipos o jugadores |
+| `GET` | `/api/me/partidos` | ✅ | ❌ | Partidos del usuario autenticado |
+
+### Query params para GET /api/partidos (públicos)
+
+| Param | Tipo | Descripción |
+|---|---|---|
+| `fecha` | `YYYY-MM-DD` | Filtrar por fecha |
+| `ciudad` | string | Filtrar por ciudad del complejo |
+
+### Crear partido
+
+```json
+POST /api/partidos
+
+{
+  "reservaId": "uuid",
+  "equipoAId": "uuid",
+  "equipoBId": "uuid",
+  "jugadores": ["uuid1", "uuid2"]
+}
+```
+
+**Reglas**:
+- `reservaId` es requerido y no puede tener ya un partido
+- `equipoAId`, `equipoBId`, `jugadores` son opcionales
+- Solo el creador de la reserva o el dueño pueden crear el partido
+
+## Equipos
+
+| Método | Ruta | Auth | CSRF | Descripción |
+|---|---|---|---|---|
+| `GET` | `/api/equipos` | ✅ | ❌ | Lista equipos del usuario (creados + miembro) |
+| `POST` | `/api/equipos` | ✅ | ✅ | Crea equipo (creador = CAPITAN automático) |
+| `GET` | `/api/equipos/[id]` | ✅ | ❌ | Detalle con miembros |
+| `PATCH` | `/api/equipos/[id]` | ✅ | ✅ | Actualiza nombre/foto/descripción (solo CAPITAN) |
+| `DELETE` | `/api/equipos/[id]` | ✅ | ✅ | Elimina equipo (solo creador) |
+| `POST` | `/api/equipos/[id]/miembros` | ✅ | ✅ | Invita miembro al equipo |
+| `DELETE` | `/api/equipos/[id]/miembros?userId=xxx` | ✅ | ✅ | Remueve miembro (o auto-salida) |
+
+### Crear equipo
+
+```json
+POST /api/equipos
+
+{
+  "nombre": "Los Galácticos FC",
+  "fotoUrl": "https://...",
+  "descripcion": "Equipo de los martes"
+}
+```
+
+### Invitar miembro
+
+```json
+POST /api/equipos/:id/miembros
+
+{
+  "userId": "uuid",
+  "rol": "MIEMBRO"
+}
+```
+
+**Reglas**:
+- Solo el CAPITAN o creador puede invitar/remover miembros
+- Un miembro puede salir del equipo por su cuenta (DELETE sin userId)
+- Se envía notificación in-app al invitado
+
+## Saldo Pendiente
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `GET` | `/api/me/saldo` | ✅ | Saldo pendiente total y reservas incompletas |
+
+### Response
+
+```json
+{
+  "saldoPendiente": 15000,
+  "bloqueado": true,
+  "reservasPendientes": [
+    {
+      "id": "uuid",
+      "cancha": "Cancha Principal",
+      "complejo": "Fútbol Center",
+      "tipo": "F7",
+      "fecha": "2026-08-12T18:00:00Z",
+      "montoTotal": 30000,
+      "montoPagado": 15000,
+      "saldoPendiente": 15000,
+      "progreso": 50
+    }
+  ]
+}
+```
+
+**Regla**: Si `bloqueado: true`, el jugador no puede crear nuevas reservas hasta pagar el saldo.
+
+## Webhook MercadoPago
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `POST` | `/api/webhooks/mercadopago` | ❌ (HMAC) | Recibe notificaciones de pago de MP |
+
+**Seguridad**: Verifica firma HMAC-SHA256 con `MP_WEBHOOK_SECRET`. No requiere autenticación JWT — la autenticación es la firma del webhook.
+
+**Flujo**:
+1. MP envía POST con `x-signature` header
+2. Sistema verifica HMAC
+3. Consulta el pago a MP API (doble verificación)
+4. Actualiza `pago.estadoPago` y `reserva.montoPagado`/`saldoPendiente`/`estado`
+5. Si pago completo → `CONFIRMADA`, si parcial → `PAGO_PARCIAL`
+6. Envía notificaciones al jugador y dueño
+
+## Cron
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `GET` | `/api/cron/liberar-expiradas` | ❌ (CRON_SECRET) | Libera reservas PENDIENTE_PAGO/PAGO_PARCIAL expiradas |
+
+**Configuración**: Vercel Cron ejecuta cada 5 minutos (`*/5 * * * *`). Requiere header `Authorization: Bearer {CRON_SECRET}`.
+
+**Acciones**: Cancela reservas expiradas, reembolsa pagos MP si existen, notifica a jugador y dueño.
+
 ## Seguridad
 
 - **Tenant isolation**: automática vía Prisma `$extends` con AsyncLocalStorage. Todas las queries a modelos multi-tenant se filtran por `tenantId` sin intervención del developer.

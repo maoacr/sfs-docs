@@ -30,13 +30,21 @@ Cada tabla de negocio incluye `tenant_id` que referencia al `user.id` del dueño
 erDiagram
     User ||--o{ Complejo : "posee (owner)"
     User ||--o{ Reserva : "realiza (player)"
+    User ||--o{ Equipo : "crea"
+    User ||--o{ EquipoMiembro : "pertenece"
+    User ||--o{ PartidoJugador : "juega"
+    User ||--o{ Partido : "crea"
     Complejo ||--o{ Cancha : "tiene"
     Complejo ||--o{ ComplejoImagen : "tiene"
     Cancha ||--o{ SlotConfig : "tiene"
     Cancha ||--o{ Tarifa : "tiene"
     Cancha ||--o{ Reserva : "recibe"
     Cancha ||--o{ ImagenCancha : "tiene"
-    Reserva ||--|| Pago : "tiene"
+    Reserva ||--o{ Pago : "tiene"
+    Reserva ||--o| Partido : "puede tener"
+    Partido ||--o{ PartidoJugador : "tiene"
+    Partido }o--o| Equipo : "equipoA / equipoB"
+    Equipo ||--o{ EquipoMiembro : "tiene"
     Tarifa ||--o{ Promocion : "puede tener"
 
     User {
@@ -76,6 +84,8 @@ erDiagram
         string twitter "nullable"
         string facebook "nullable"
         string descripcion "nullable"
+        int plazo_cancelacion_horas "default: 24"
+        int penalizacion_porcentaje "default: 0"
         datetime deleted_at "soft delete"
     }
 
@@ -127,17 +137,20 @@ erDiagram
         timestamp slot_inicio
         timestamp slot_fin
         decimal monto_total
-        enum estado "PENDIENTE_PAGO | CONFIRMADA | COMPLETADA | CANCELADA"
+        decimal monto_pagado "default: 0"
+        decimal saldo_pendiente "default: 0"
+        enum estado "PENDIENTE_PAGO | PAGO_PARCIAL | CONFIRMADA | COMPLETADA | CANCELADA"
         datetime deleted_at
     }
 
     Pago {
         uuid id PK
         uuid reserva_id FK
+        uuid user_id FK "quien paga"
         decimal monto
         enum estado_pago "PENDIENTE | APROBADO | RECHAZADO | REEMBOLSADO"
-        string mp_preference_id "Mercado Pago"
-        string mp_payment_id
+        string mp_split_id "MP Split ID"
+        string mp_payment_id "MP Payment ID"
         jsonb mp_metadata
     }
 
@@ -159,6 +172,35 @@ erDiagram
         datetime valido_hasta
         int usos_maximos "null = ilimitado"
         int usos_actuales
+    }
+
+    Partido {
+        uuid id PK
+        uuid reserva_id FK "unique, 1:1"
+        uuid creador_id FK
+        uuid equipo_a_id FK "nullable"
+        uuid equipo_b_id FK "nullable"
+    }
+
+    PartidoJugador {
+        uuid id PK
+        uuid partido_id FK
+        uuid user_id FK
+    }
+
+    Equipo {
+        uuid id PK
+        string nombre
+        string foto_url "nullable"
+        string descripcion "nullable"
+        uuid creador_id FK
+    }
+
+    EquipoMiembro {
+        uuid id PK
+        uuid equipo_id FK
+        uuid user_id FK
+        string rol "CAPITAN | MIEMBRO"
     }
 ```
 
@@ -216,12 +258,15 @@ Agrupa canchas bajo un mismo espacio físico. Un dueño puede tener múltiples c
 | `twitter` | `VARCHAR(30)` nullable | |
 | `facebook` | `VARCHAR(50)` nullable | |
 | `descripcion` | `TEXT` nullable | |
+| `plazo_cancelacion_horas` | `INT DEFAULT 24` | Horas mínimas antes del slot para cancelar sin penalización |
+| `penalizacion_porcentaje` | `INT DEFAULT 0` | % de penalización si cancela fuera del plazo (0-100) |
 | `deleted_at` | `TIMESTAMPTZ` | |
 
 **Decisiones**:
 - Dirección fragmentada al estilo colombiano (`tipo_via + numero_via + # + complemento`) para geocoding preciso con Nominatim.
 - Redes sociales por complejo: cada espacio deportivo maneja sus propias cuentas.
 - `lat`/`lng` como FLOAT para uso directo en mapas (Google Maps, Waze). La columna `ubicacion` (PostGIS geometry) queda para futuras búsquedas geoespaciales.
+- `plazo_cancelacion_horas` + `penalizacion_porcentaje`: políticas de cancelación configurables por complejo. Si el jugador cancela dentro del plazo, reembolso 100%. Fuera del plazo, se descuenta la penalización.
 
 ### `complejo_imagenes`
 
@@ -322,34 +367,42 @@ El evento central del sistema. Un jugador reserva una cancha en un slot específ
 | `slot_inicio` | `TIMESTAMPTZ` | Fecha y hora de inicio |
 | `slot_fin` | `TIMESTAMPTZ` | Fecha y hora de fin |
 | `monto_total` | `DECIMAL(10,2)` | Precio final aplicado (calculado al reservar) |
-| `estado` | `ENUM('PENDIENTE_PAGO','CONFIRMADA','COMPLETADA','CANCELADA')` | |
+| `monto_pagado` | `DECIMAL(10,2) DEFAULT 0` | Suma de pagos aprobados |
+| `saldo_pendiente` | `DECIMAL(10,2) DEFAULT 0` | `monto_total - monto_pagado` |
+| `estado` | `ENUM('PENDIENTE_PAGO','PAGO_PARCIAL','CONFIRMADA','COMPLETADA','CANCELADA')` | |
 | `deleted_at` | `TIMESTAMPTZ` | |
 
 **Decisiones**:
 - `monto_total` se calcula al momento de crear la reserva y se congela. Si el dueño cambia precios después, no afecta reservas existentes. Esto es importante para integridad financiera.
-- `PENDIENTE_PAGO` tiene TTL: si no se paga en N minutos (ej: 15), se libera el slot.
+- `PENDIENTE_PAGO` tiene TTL: si no se paga en 15 minutos, se libera el slot.
+- `PAGO_PARCIAL`: el jugador pagó al menos el 50% pero no el total. La reserva está asegurada pero debe completar el pago antes de jugar.
+- `monto_pagado` y `saldo_pendiente` se actualizan con cada pago aprobado vía webhook.
+- Jugadores con `saldo_pendiente > 0` en cualquier reserva no pueden crear nuevas reservas (bloqueo por saldo).
 - `slot_inicio` y `slot_fin` validan contra `slot_configs` de la cancha.
 - **Constraint UNIQUE**: No puede haber dos reservas confirmadas para la misma cancha con solapamiento de horario.
 
 ### `pagos`
 
-Registro de transacciones de Mercado Pago. Una reserva tiene exactamente un pago (relación 1:1).
+Registro de transacciones de Mercado Pago. Una reserva puede tener **múltiples pagos** (pago parcial + saldo, pagos compartidos entre jugadores).
 
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | `UUID` PK | |
-| `reserva_id` | `UUID` UNIQUE FK → `reservas.id` | 1:1 |
-| `monto` | `DECIMAL(10,2)` | Debería coincidir con `reserva.monto_total` |
+| `reserva_id` | `UUID` FK → `reservas.id` | |
+| `user_id` | `UUID` FK → `users.id` | Quien realizó el pago (puede ser distinto al player_id si es pago compartido) |
+| `monto` | `DECIMAL(10,2)` | Monto de este pago específico |
 | `estado_pago` | `ENUM('PENDIENTE','APROBADO','RECHAZADO','REEMBOLSADO')` | |
-| `mp_preference_id` | `VARCHAR(255)` | ID de preferencia en Mercado Pago |
-| `mp_payment_id` | `VARCHAR(255)` | ID del pago (cuando se completa) |
-| `mp_metadata` | `JSONB` | Respuesta completa del webhook |
+| `mp_split_id` | `VARCHAR(255)` nullable | ID del split en MercadoPago |
+| `mp_payment_id` | `VARCHAR(255)` nullable | ID del pago (cuando se completa) |
+| `mp_metadata` | `JSONB` nullable | Respuesta completa del webhook |
 
 **Flujo**:
 1. Jugador inicia reserva → `reserva.estado = PENDIENTE_PAGO`
-2. Backend crea preferencia en MP → `pago.mp_preference_id`
+2. Backend crea preference/split en MP → `pago.mp_split_id`
 3. Jugador paga en MP → webhook actualiza `pago.estado_pago = APROBADO`
-4. Backend actualiza `reserva.estado = CONFIRMADA`
+4. Backend actualiza `reserva.monto_pagado` y `reserva.saldo_pendiente`
+5. Si pagó el 50-99% → `reserva.estado = PAGO_PARCIAL`
+6. Si pagó el 100% → `reserva.estado = CONFIRMADA`
 
 ### `imagenes_canchas`
 
@@ -378,6 +431,63 @@ Códigos de descuento vinculados a tarifas.
 | `valido_hasta` | `TIMESTAMPTZ` | |
 | `usos_maximos` | `INT` nullable | `null` = ilimitado |
 | `usos_actuales` | `INT DEFAULT 0` | |
+
+### `partidos`
+
+Un partido vincula una reserva con los jugadores y equipos que participan. Relación 1:1 con reserva.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `reserva_id` | `UUID` UNIQUE FK → `reservas.id` | 1:1 — cada partido tiene exactamente una reserva |
+| `creador_id` | `UUID` FK → `users.id` | Quien creó el partido |
+| `equipo_a_id` | `UUID` FK → `equipos.id` nullable | Equipo local (opcional) |
+| `equipo_b_id` | `UUID` FK → `equipos.id` nullable | Equipo visitante (opcional) |
+| `created_at` | `TIMESTAMPTZ` | |
+
+**Decisiones**:
+- `reserva_id` UNIQUE: un partido siempre está vinculado a exactamente una reserva de cancha.
+- Equipos opcionales: un partido puede existir sin equipos asignados (amistoso casual).
+- Cualquier jugador invitado al partido puede pagar parte de la reserva (pagos compartidos).
+
+### `partido_jugadores`
+
+Jugadores invitados a un partido. Tabla pivote entre partidos y usuarios.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `partido_id` | `UUID` FK → `partidos.id` | |
+| `user_id` | `UUID` FK → `users.id` | |
+
+**Constraint**: `UNIQUE(partido_id, user_id)` — un jugador no puede estar duplicado en el mismo partido.
+
+### `equipos`
+
+Grupos recurrentes de jugadores que juegan juntos.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `nombre` | `VARCHAR(100)` | "Los Galácticos FC" |
+| `foto_url` | `VARCHAR(500)` nullable | Logo o foto del equipo |
+| `descripcion` | `TEXT` nullable | |
+| `creador_id` | `UUID` FK → `users.id` | Quien creó el equipo |
+| `created_at` | `TIMESTAMPTZ` | |
+| `updated_at` | `TIMESTAMPTZ` | |
+
+### `equipo_miembros`
+
+Miembros de un equipo. Tabla pivote entre equipos y usuarios.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` PK | |
+| `equipo_id` | `UUID` FK → `equipos.id` | |
+| `user_id` | `UUID` FK → `users.id` | |
+| `rol` | `VARCHAR(20) DEFAULT 'MIEMBRO'` | `CAPITAN` o `MIEMBRO` |
+
+**Constraint**: `UNIQUE(equipo_id, user_id)` — un usuario no puede estar duplicado en el mismo equipo.
 
 ## Índices
 
@@ -438,9 +548,3 @@ Los horarios de una cancha son patrones semanales ("Lunes a Viernes 8-23, Sábad
 ```
 disponibilidad(semana) = slot_configs − reservas_confirmadas(semana)
 ```
-
-## Próximos pasos
-
-- [ ] Traducir este modelo a un schema de Prisma (`schema.prisma`)
-- [ ] Definir las migraciones iniciales
-- [ ] Implementar seed data para desarrollo
