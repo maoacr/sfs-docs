@@ -39,9 +39,9 @@ const apertura = new Date("2026-08-06T18:00:00");
 
 Las columnas `Timestamptz` almacenan el timestamp en UTC internamente. PostgreSQL convierte automáticamente al insertar/leer según el `timezone` de la sesión.
 
-### Lectura (Prisma)
+### Lectura (Drizzle)
 
-Prisma devuelve objetos `Date` de JavaScript. Un `Date` en JavaScript **siempre** representa un instante en UTC internamente (milisegundos desde epoch), pero sus métodos como `getHours()` usan la zona horaria local del sistema.
+Drizzle devuelve objetos `Date` de JavaScript para las columnas `timestamp`. Un `Date` en JavaScript **siempre** representa un instante en UTC internamente (milisegundos desde epoch), pero sus métodos como `getHours()` usan la zona horaria local del sistema.
 
 ### El bug clásico (y cómo evitarlo)
 
@@ -81,7 +81,7 @@ Cuando trabajes con fechas en el backend, verificá:
 
 - [ ] ¿Estoy construyendo fechas manualmente con `new Date()`? → Sin `Z`
 - [ ] ¿Estoy usando `getUTCHours()` para extraer horas de un `Date` que viene de la DB? → Correcto, los timestamps de DB están en UTC
-- [ ] ¿Estoy filtrando por rango de fechas en Prisma? → Usar hora local para los límites (`"2026-08-06T23:59:59"` sin Z)
+- [ ] ¿Estoy filtrando por rango de fechas en una query? → Usar hora local para los límites (`"2026-08-06T23:59:59"` sin Z)
 - [ ] ¿Estoy serializando para API? → `toISOString()` es correcto, el frontend se encarga de la conversión
 
 ## Stack trace del bug real

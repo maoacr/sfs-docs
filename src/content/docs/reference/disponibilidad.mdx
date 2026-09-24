@@ -18,22 +18,23 @@ El endpoint `GET /api/disponibilidad` es el corazón del buscador de canchas. Es
 
 Se consultan todas las canchas activas (`deletedAt: null`) que tengan un `SlotConfig` para el día de la semana de la fecha solicitada.
 
-```prisma
-cancha.findMany({
-  where: {
-    deletedAt: null,
-    tipo: "F5",              // opcional
-    slots: { some: { diaSemana: 3 } }  // miércoles
+```ts
+db.query.canchas.findMany({
+  where: and(
+    isNull(canchas.deletedAt),
+    tipo ? eq(canchas.tipo, tipoCanchaToDb(tipo)) : undefined // "F5" → "FUTBOL_5"
+  ),
+  with: {
+    complejo: true,                                       // nombre, dirección, coordenadas
+    slots: { where: eq(slotConfigs.diaSemana, diaSemana) },
+    tarifas: true,
+    imagenes: { orderBy: (i, { asc }) => [asc(i.orden)] },
+    reservas: { ... },                                    // activas del día consultado
   },
-  include: {
-    complejo: { ... },       // nombre, dirección, teléfono
-    slots: { where: { diaSemana } },
-    tarifas: { where: { diaSemana: null }, take: 1 },
-    imagenes: { where: { principal: true }, take: 1 },
-    reservas: { ... }        // del día consultado
-  }
 })
 ```
+
+Las canchas sin `SlotConfig` para ese día se descartan al calcular los slots.
 
 ### Paso 2: Generación de slots
 

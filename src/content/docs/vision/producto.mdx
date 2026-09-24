@@ -57,7 +57,7 @@ El sistema soportará un motor de reglas de precios configurable por el dueño:
 | **Frontend** | Next.js (App Router) | SSR/SSG para SEO, Server Components, API Routes integradas |
 | **Backend** | Node.js + TypeScript | Mismo lenguaje que frontend, ecosistema enorme, ideal fullstack |
 | **Base de datos** | PostgreSQL + PostGIS | Relacional robusta, geolocalización nativa, JSONB para configs dinámicas |
-| **ORM** | Prisma | Schema declarativo (pedagógico), migraciones automáticas, type-safe |
+| **ORM** | Drizzle ORM | Schema en TypeScript, SQL explícito, migraciones versionadas con drizzle-kit, compatible con el pooler de Supabase |
 | **Pagos** | Mercado Pago | Dominancia en Latinoamérica, cuotas, billetera digital |
 | **Notificaciones** | In-app (DB) + Email (Resend) | Doble canal: badge + drawer en la app, emails transaccionales |
 | **Auth** | Manual (bcrypt + JWT) → Supabase Auth (post-MVP) | Aprender fundamentos; migrar a managed cuando esté dominado |

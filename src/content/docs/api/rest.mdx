@@ -37,7 +37,7 @@ Excepciones: `POST /api/auth/login` y `POST /api/auth/register` no requieren CSR
 
 ### Tenant isolation
 
-Todas las queries a modelos multi-tenant (Cancha, Complejo, Reserva, Tarifa, SlotConfig, Promocion) se filtran automáticamente por `tenantId`. No es necesario incluirlo manualmente — el sistema lo inyecta vía Prisma `$extends` con AsyncLocalStorage.
+Cada query a modelos multi-tenant (Complejo, Cancha, Reserva y sus recursos hijos) filtra explícitamente por el `tenantId` del dueño autenticado. Ver [Guía de Seguridad](/guides/security).
 
 ## Autenticación
 
@@ -484,29 +484,31 @@ POST /api/equipos/:id/miembros
 |---|---|---|---|
 | `POST` | `/api/webhooks/mercadopago` | ❌ (HMAC) | Recibe notificaciones de pago de MP |
 
-**Seguridad**: Verifica firma HMAC-SHA256 con `MP_WEBHOOK_SECRET`. No requiere autenticación JWT — la autenticación es la firma del webhook.
+**Seguridad**: Ruta pública en el proxy (MP llama sin cookie). Verifica la firma HMAC-SHA256 de `x-signature` sobre el manifest `id;request-id;ts` con `MP_WEBHOOK_SECRET`.
 
 **Flujo**:
-1. MP envía POST con `x-signature` header
-2. Sistema verifica HMAC
+1. MP envía POST con headers `x-signature` y `x-request-id`
+2. Sistema verifica la firma
 3. Consulta el pago a MP API (doble verificación)
-4. Actualiza `pago.estadoPago` y `reserva.montoPagado`/`saldoPendiente`/`estado`
+4. Busca el `Pago` por `external_reference` (id del pago) y lo aplica en una transacción idempotente
 5. Si pago completo → `CONFIRMADA`, si parcial → `PAGO_PARCIAL`
 6. Envía notificaciones al jugador y dueño
+
+**Respuestas**: `200` si se procesó o se ignoró (duplicado, otro tipo de evento), `401` firma inválida, `500` error inesperado (MP reintenta).
 
 ## Cron
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
-| `GET` | `/api/cron/liberar-expiradas` | ❌ (CRON_SECRET) | Libera reservas PENDIENTE_PAGO/PAGO_PARCIAL expiradas |
+| `GET` | `/api/cron/liberar-expiradas` | ❌ (CRON_SECRET) | Libera reservas PENDIENTE_PAGO expiradas |
 
-**Configuración**: Vercel Cron ejecuta cada 5 minutos (`*/5 * * * *`). Requiere header `Authorization: Bearer {CRON_SECRET}`.
+**Configuración**: Vercel Cron ejecuta cada 5 minutos (`*/5 * * * *`). Ruta pública en el proxy; requiere header `Authorization: Bearer {CRON_SECRET}` y rechaza todo si `CRON_SECRET` no está definido.
 
-**Acciones**: Cancela reservas expiradas, reembolsa pagos MP si existen, notifica a jugador y dueño.
+**Acciones**: Cancela las reservas `PENDIENTE_PAGO` con más de 15 minutos y notifica a jugador y dueño. Las `PAGO_PARCIAL` no expiran.
 
 ## Seguridad
 
-- **Tenant isolation**: automática vía Prisma `$extends` con AsyncLocalStorage. Todas las queries a modelos multi-tenant se filtran por `tenantId` sin intervención del developer.
+- **Tenant isolation**: explícita. Cada query a modelos multi-tenant filtra por `tenantId` o verifica la pertenencia del recurso padre.
 - **Cookies HttpOnly + SameSite=strict**: `sfs_token` y `sfs_refresh` no son accesibles desde JavaScript ni se envían en requests cross-site.
 - **bcrypt**: contraseñas hasheadas con 12 rounds.
 - **JWT**: access token expira en 15 min, refresh token en 7 días.

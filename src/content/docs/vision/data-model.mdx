@@ -3,6 +3,22 @@ title: Modelo de Datos
 description: Diseño detallado de la base de datos — entidades, relaciones, tipos, índices y decisiones de diseño.
 ---
 
+:::caution[Documento del modelo lógico — pendiente de actualizar]
+Este documento describe el modelo original (Prisma) y el **contrato de la API**, que se mantuvo igual. El schema físico actual es el de Drizzle y la fuente de verdad es `web/packages/db/src/schema/`. Diferencias principales, que `src/lib/db-mappers.ts` traduce en la API:
+
+| API / este documento | Base de datos (Drizzle) |
+|---|---|
+| tabla `users` | `usuarios` |
+| `primer_nombre` + `segundo_nombre`, `apellidos` | `nombre` (ambos nombres), `apellido` |
+| `role` | `rol` (enum `rol_usuario`, incluye `ADMIN`, sin acceso a la app) |
+| tipo `F5` … `F11` | enum `tipo_cancha`: `FUTBOL_5` … `FUTBOL_11` |
+| `lat` / `lng` (float) | `latitud` / `longitud` (decimal) |
+| `plazo_cancelacion_horas`, `penalizacion_porcentaje` | `politica_cancelacion_horas`, `politica_cancelacion_penalizacion` |
+| tabla `complejo_imagenes` | `imagenes_complejos` |
+| notificación `RESERVA_PAGO_PARCIAL` | `PAGO_PARCIAL_RECIBIDO` |
+| — | `complejos.direccion` (texto formateado) + `slug`; estado `EXPIRADA` disponible |
+:::
+
 ## Convenciones
 
 - **Nombres en español** para entidades de negocio (`cancha`, `reserva`, `pago`)

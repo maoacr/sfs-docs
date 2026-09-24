@@ -87,35 +87,34 @@ El token CSRF se genera en `GET /api/auth/me` y se envía como cookie + header. 
 
 ### Mecanismo
 
-Prisma `$extends` con [AsyncLocalStorage](https://nodejs.org/api/async_context.html) de Node.js. Cuando un usuario se autentica, su `userId` se almacena en un contexto asíncrono por request. Cada query de Prisma a modelos multi-tenant recibe automáticamente el filtro `tenantId`.
+Con Drizzle ORM el filtro por tenant es **explícito**: cada query sobre un modelo multi-tenant incluye la condición de pertenencia. No hay extensión que lo inyecte sola (la extensión de Prisma que existía se eliminó en la migración a Drizzle).
 
 ### Modelos multi-tenant
 
-Cancha, Complejo, Reserva, ComplejoImagen, ImagenCancha, SlotConfig, Tarifa, Promocion.
+`complejos`, `canchas` y `reservas` tienen `tenant_id` (el dueño). Imágenes, slots y tarifas se protegen verificando que su cancha o complejo pertenezca al dueño.
 
 ### Modelos sin tenant
 
-User, Notificacion, Pago (no tienen `tenantId` en el schema).
+`usuarios`, `notificaciones`, `pagos`, `equipos`, `partidos` (se protegen por `user_id`, `player_id` o `creador_id`).
 
-### Qué hace el middleware
+### Patrón
 
 ```typescript
-// En create: inyecta tenantId automáticamente
-prisma.cancha.create({ data: { nombre: "F7" } })
-// → prisma.cancha.create({ data: { nombre: "F7", tenantId: "abc-123" } })
+// Lectura: el tenant va en el where
+db.query.canchas.findFirst({
+  where: and(eq(canchas.id, id), eq(canchas.tenantId, user.sub)),
+});
 
-// En findMany: añade filtro where
-prisma.cancha.findMany()
-// → prisma.cancha.findMany({ where: { tenantId: "abc-123" } })
-
-// Si el developer ya incluyó tenantId, NO lo duplica
-prisma.cancha.findMany({ where: { tenantId: "otro-id" } })
-// → respeta el filtro explícito
+// Recursos hijos: primero verificar que el padre es del dueño
+const cancha = await db.query.canchas.findFirst({
+  where: and(eq(canchas.id, canchaId), eq(canchas.tenantId, user.sub)),
+});
+if (!cancha) return 404;
 ```
 
 ### Seguridad
 
-Si un developer se olvida de filtrar por `tenantId`, el middleware lo inyecta automáticamente. Esto elimina la clase de bugs más peligrosa en SaaS: leaks de datos entre tenants.
+Al no haber red de seguridad automática, **toda query nueva sobre un modelo multi-tenant debe revisarse en code review**: si falta el filtro, un dueño puede ver o modificar datos de otro.
 
 ---
 
@@ -162,7 +161,7 @@ Todas las rutas refactorizadas usan `apiHandler()`, que encapsula las 5 capas de
 export const POST = apiHandler<CreateCanchaInput>(
   async (_request, _ctx, { body }) => {
     // Solo lógica de negocio — sin validación, sin auth, sin rate limit
-    const cancha = await prisma.cancha.create({ data: body });
+    const [cancha] = await db.insert(canchas).values({ ...body, tenantId: ctx.user!.sub }).returning();
     return NextResponse.json(cancha, { status: 201 });
   },
   {

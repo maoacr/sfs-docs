@@ -15,7 +15,7 @@ Establece los cimientos de seguridad, validación y testing. Sin esto, todo lo d
 |---|---|---|---|
 | **0.1** | Zod en todas las API routes — validación de inputs en runtime | P0 | ✅ |
 | **0.2** | Rate limiting — protección contra abuso y brute force | P0 | ✅ |
-| **0.3** | Prisma $extends de tenant isolation — filtro automático por `tenantId` | P0 | ✅ |
+| **0.3** | Tenant isolation — filtro por `tenantId` (explícito por query desde la migración a Drizzle) | P0 | ✅ |
 | **0.4** | CSRF protection — double-submit cookie + SameSite=strict | P0 | ✅ |
 | **0.5** | Test suite inicial — Vitest + 14 tests de schemas | P0 | ✅ |
 
@@ -23,12 +23,12 @@ Establece los cimientos de seguridad, validación y testing. Sin esto, todo lo d
 - `pnpm test` → 14/14 pasan (1.9s)
 - `pnpm tsc --noEmit` → 0 errores
 - Rate limiting responde 429 al exceder límite
-- Toda query multi-tenant incluye `tenantId` automáticamente vía AsyncLocalStorage
+- Toda query multi-tenant filtra por `tenantId`
 - CSRF requerido para POST/PUT/PATCH/DELETE (excepto login/register)
 
-**Stack agregado**: zod, vitest, @testing-library/react, nanoid, @prisma/client (workspace root)
+**Stack agregado**: zod, vitest, @testing-library/react, nanoid
 
-**Archivos clave**: `src/lib/schemas.ts`, `src/lib/api-handler.ts`, `src/lib/tenant-middleware.ts`, `src/lib/csrf.ts`, `src/lib/rate-limit.ts`
+**Archivos clave**: `src/lib/schemas.ts`, `src/lib/api-handler.ts`, `src/lib/csrf.ts`, `src/lib/rate-limit.ts`
 
 **Docs**: [Guía de Seguridad](/guides/security)
 
@@ -38,12 +38,13 @@ Establece los cimientos de seguridad, validación y testing. Sin esto, todo lo d
 
 **Estado**: 🟢 Completada — 2026-08-10
 
-Implementa la lógica de pricing, pagos con MercadoPago Split 1:N (85/15), TTL real, políticas de cancelación y emails transaccionales. Incluye modelo de Partidos y Equipos para pagos compartidos.
+Implementa la lógica de pricing, pagos con MercadoPago Checkout Pro, TTL real, políticas de cancelación y emails transaccionales. Incluye modelo de Partidos y Equipos para pagos compartidos.
 
 | Tarea | Descripción | Prioridad | Estado |
 |---|---|---|---|
 | **1.1** | Motor de precios dinámicos — `tarifas` + `promociones` → precio final | P0 | ✅ |
-| **1.2** | MercadoPago Split Payments 1:N + Webhooks con HMAC | P0 | ✅ |
+| **1.2** | MercadoPago Checkout Pro + Webhooks con firma HMAC | P0 | ✅ |
+| **1.2b** | Split Payments 85/15 — requiere OAuth de marketplace con las cuentas de los dueños | P1 | 🔴 |
 | **1.3** | TTL de reservas — limpieza oportunista + Vercel Cron cada 5 min | P0 | ✅ |
 | **1.4** | Políticas de cancelación y reembolso configurables por complejo | P0 | ✅ |
 | **1.5** | Emails transaccionales — Resend con templates HTML | P0 | ✅ |
@@ -55,7 +56,7 @@ Implementa la lógica de pricing, pagos con MercadoPago Split 1:N (85/15), TTL r
 - `pnpm test` → 33/33 pasan
 - `pnpm tsc --noEmit` → 0 errores
 - Motor de precios con match de tarifa específica + promociones
-- Split MP 85/15 creado automáticamente al pagar
+- Pago con Checkout Pro; webhook idempotente (ver estabilización abajo)
 - Pago mínimo 50%, bloqueo por saldo pendiente
 - Cancelación con políticas configurables por complejo + refund MP
 - Emails para PAGO_PARCIAL, RECIBO_PAGO, y notificaciones al dueño
@@ -63,6 +64,31 @@ Implementa la lógica de pricing, pagos con MercadoPago Split 1:N (85/15), TTL r
 **Stack agregado**: mercadopago, Vercel Cron
 
 **Archivos clave**: `src/lib/pricing.ts`, `src/lib/mercadopago.ts`, `src/app/api/webhooks/mercadopago/`, `src/app/api/reservas/[id]/pagar/`, `src/app/player/reservar/[id]/`, `vercel.json`
+
+---
+
+## Estabilización: Migración a Drizzle + flujo de pagos
+
+**Estado**: 🟡 En rama `feat/drizzle-migration` — 2026-09-24
+
+La Fase 1 quedó marcada como completa, pero el flujo de pago real no funcionaba. Esta estabilización cierra la migración de Prisma a Drizzle y corrige las causas raíz.
+
+| Tarea | Descripción | Estado |
+|---|---|---|
+| **E.1** | Migrar todas las rutas a Drizzle y eliminar Prisma (el alias `prisma = db as any` ocultaba fallos en runtime) | ✅ |
+| **E.2** | Adaptadores DB ↔ API (`src/lib/db-mappers.ts`) para no romper el frontend | ✅ |
+| **E.3** | Migración `0001`: dirección estructurada y `codigo_pais` | ✅ |
+| **E.4** | Webhook y cron públicos en el proxy (antes redirigían a `/auth/login`) | ✅ |
+| **E.5** | Firma del webhook con `request-id`; idempotencia con transacción y `FOR UPDATE` | ✅ |
+| **E.6** | TTL solo expira `PENDIENTE_PAGO`; reembolso de pagos aprobados tras expirar | ✅ |
+| **E.7** | Cancelación unificada con política de reembolso (`src/lib/cancelacion.ts`) | ✅ |
+| **E.8** | Probar pago real en sandbox con buyer test user y túnel público | 🔴 |
+| **E.9** | Merge a `main` y deploy | 🔴 |
+
+**Verificación**:
+- `pnpm test` → 55/55 pasan
+- `tsc --noEmit` → 0 errores
+- Webhook con dos notificaciones concurrentes del mismo pago → se aplica una sola vez
 
 ---
 
