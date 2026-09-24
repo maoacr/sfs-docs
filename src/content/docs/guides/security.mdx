@@ -75,7 +75,19 @@ Double-submit cookie pattern: el servidor genera un token aleatorio y lo envía 
 
 ### Obtención del token
 
-El token CSRF se genera en `GET /api/auth/me` y se envía como cookie + header. El frontend debe cachearlo y enviarlo en cada request unsafe.
+La cookie `csrf_token` se emite al hacer **login o registro**, y `GET /api/auth/me` la renueva **reusando el mismo valor** (rotarlo en cada llamada rompería escrituras en curso que ya leyeron el anterior).
+
+En el frontend, **todo request que escribe usa `apiFetch`** (`src/lib/api-client.ts`) en vez de `fetch`: agrega `X-CSRF-Token` desde la cookie y, si la cookie no existe (por ejemplo, expiró), primero la obtiene de `GET /api/auth/me`. Ninguna pantalla tiene que acordarse de mandar el header.
+
+```ts
+import { apiFetch } from "@/lib/api-client";
+
+await apiFetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body });
+```
+
+:::caution
+Las rutas que no usan `apiHandler` (complejos/[id], canchas/[id], slots, tarifas, imágenes, `PUT /api/reservas/[id]`, sync) todavía **no validan** el token. La cookie de sesión `SameSite=strict` mitiga el riesgo, pero están pendientes de migrar a `apiHandler`.
+:::
 
 ### Excepciones
 

@@ -31,7 +31,7 @@ Headers de respuesta: `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
 
 ### CSRF
 
-Los métodos `POST`, `PUT`, `PATCH`, `DELETE` requieren header `X-CSRF-Token` que coincida con la cookie `csrf_token`. El token se obtiene de la respuesta de `GET /api/auth/me` o cualquier GET exitoso.
+Los métodos `POST`, `PUT`, `PATCH`, `DELETE` de las rutas con `apiHandler` requieren header `X-CSRF-Token` que coincida con la cookie `csrf_token`. La cookie se emite en login/registro y `GET /api/auth/me` la renueva. En el frontend, `apiFetch` (`src/lib/api-client.ts`) envía el header automáticamente.
 
 Excepciones: `POST /api/auth/login` y `POST /api/auth/register` no requieren CSRF (no hay sesión aún).
 
@@ -196,7 +196,7 @@ X-CSRF-Token: <token>
 |---|---|---|---|---|---|
 | `GET` | `/api/reservas` | ✅ | default | ❌ | Lista reservas (owner ve sus canchas, player ve las propias) |
 | `POST` | `/api/reservas` | ✅ | 10/min | ✅ | Crea una reserva (estado: `PENDIENTE_PAGO`) |
-| `PUT` | `/api/reservas/[id]` | ✅ | default | ✅ | Cambia estado (`CANCELADA`, `COMPLETADA`) |
+| `PUT` | `/api/reservas/[id]` | ✅ | default | ⚠️ pendiente | Cambia estado (`CANCELADA` aplica política de reembolso; `COMPLETADA` solo el dueño) |
 | `POST` | `/api/reservas/liberar-expiradas` | ❌ | default | ❌ | Libera reservas `PENDIENTE_PAGO` que excedieron TTL (15 min) |
 
 ### GET query params
