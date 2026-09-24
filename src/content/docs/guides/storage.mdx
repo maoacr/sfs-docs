@@ -1,0 +1,55 @@
+---
+title: Storage (imágenes y archivos)
+description: Buckets de Supabase Storage en SFS — qué va en cada uno, por qué, y cómo se sirve.
+---
+
+SFS usa **dos buckets**, cada uno con una sola regla de acceso. Mezclar contenido público con contenido personal en un mismo bucket obliga a elegir la regla más débil para todo.
+
+| Bucket | Visibilidad | Contenido | Cómo se sirve |
+|---|---|---|---|
+| `canchas` | Público | Fotos de canchas y complejos | URL fija guardada en la base |
+| `sfs` | Privado | Fotos de personas y equipos; documentos | La base guarda la **ruta**; la API devuelve URLs firmadas que vencen |
+
+Los dos se crean con la migración `web/packages/db/drizzle/0003_storage_buckets.sql`, así cualquier entorno nuevo queda igual.
+
+## Por qué las fotos de canchas son públicas
+
+El navegador pide la imagen **directo a Supabase**, sin pasar por la API ni por el login. Con un bucket público, cualquiera con la URL puede **ver** ese archivo, y nada más:
+
+- No se puede listar el bucket ni adivinar otras rutas (llevan timestamp y sufijo aleatorio).
+- Subir y borrar sigue requiriendo la service role key, que solo tiene el servidor.
+- La URL no cambia, así que el navegador y la CDN la cachean (menos egress).
+
+Las fotos de una cancha están hechas para mostrarse: protegerlas no aporta seguridad y cuesta rendimiento.
+
+## Por qué las fotos de personas son privadas
+
+Una foto que identifica a una persona es **dato personal** (Ley 1581, habeas data): se trata con autorización y el titular puede pedir que se elimine. Con un bucket público, una URL filtrada sirve para siempre; con URLs firmadas, **la API decide quién la ve** y lo que se repartió deja de funcionar al vencer.
+
+Cuando se implementen fotos de perfil y equipos:
+
+1. Guardar en la base la **ruta** del objeto, no una URL.
+2. Firmar en la API con `createSignedUrls` (una sola llamada para todas las fotos de una respuesta) y una expiración de alrededor de una hora.
+3. Al borrar la foto o la cuenta, borrar también el objeto del bucket.
+4. Pedir el consentimiento en el registro (Fase 2 legal).
+
+## Cómo se sube (bucket `canchas`)
+
+Siempre desde el servidor, con `uploadImage` (`web/src/lib/storage.ts`):
+
+- Convierte a **WebP**, redimensiona a máximo 1920 px y elimina metadatos EXIF.
+- El bucket solo acepta `image/webp` y hasta **5 MB**: Supabase aplica esas restricciones incluso a la service role key, así que un archivo que no pasó por la optimización falla al subir.
+
+## Límites del plan Free
+
+No hay límite documentado de cantidad de buckets. Lo que se limita es el total entre todos:
+
+| Límite | Valor |
+|---|---|
+| Almacenamiento | 1 GB |
+| Tamaño máximo por archivo | 50 MB |
+| Transferencia mensual (egress) | 10 GB (5 GB con caché + 5 GB sin caché) |
+
+Con fotos WebP de unos 200 KB, la **transferencia** es el límite que llega primero (del orden de 50.000 visualizaciones por mes). Para bajarla: caché larga en las fotos públicas y no pedir imágenes más grandes de lo que se muestran.
+
+Fuentes: [Storage Pricing](https://supabase.com/docs/guides/storage/pricing) · [File Limits](https://supabase.com/docs/guides/storage/uploads/file-limits) · [Bandwidth & Egress](https://supabase.com/docs/guides/storage/serving/bandwidth)

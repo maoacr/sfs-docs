@@ -83,14 +83,27 @@ La Fase 1 quedó marcada como completa, pero el flujo de pago real no funcionaba
 | **E.6** | TTL solo expira `PENDIENTE_PAGO`; reembolso de pagos aprobados tras expirar | ✅ |
 | **E.7** | Cancelación unificada con política de reembolso (`src/lib/cancelacion.ts`) | ✅ |
 | **E.7b** | Zona horaria por complejo: turnos, precios, filtros por día, emails y UI en la hora de la cancha | ✅ |
+| **E.7c** | CSRF desde el cliente (`apiFetch`) y todas las rutas con sesión en `apiHandler` | ✅ |
+| **E.7d** | Storage: bucket público `canchas` y privado `sfs`, versionados en la migración `0003` ([guía](/guides/storage)) | ✅ |
 | **E.8** | Probar pago real en sandbox con buyer test user y túnel público | 🔴 |
 | **E.9** | Merge a `main` y deploy | 🔴 |
 
 **Verificación**:
-- `pnpm test` → 69/69 pasan
+- `pnpm test` → 81/81 pasan
 - `tsc --noEmit` → 0 errores
 - Webhook con dos notificaciones concurrentes del mismo pago → se aplica una sola vez
 - Reserva 19:00 en Bogotá → `slot_inicio` 00:00 UTC del día siguiente, listada en su día local
+- Foto subida a `canchas` → servida pública como WebP; al borrarla desaparece de la base y del bucket
+
+---
+
+## API independiente: `sfs-api`
+
+**Estado**: 🔴 Por planificar
+
+El backend va a vivir en un repositorio propio, **`sfs-api`**, desplegado en **Railway**, para que la web y la app mobile consuman la misma API. Hoy la API está dentro de `web` (route handlers de Next.js).
+
+Las tareas se definen al planificar esta fase.
 
 ---
 

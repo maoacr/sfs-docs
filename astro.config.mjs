@@ -50,6 +50,7 @@ export default defineConfig({
 						{ label: 'MercadoPago', slug: 'guides/mercadopago' },
 						{ label: 'Email (Resend)', slug: 'guides/email' },
 						{ label: 'Zonas Horarias', slug: 'guides/timezone' },
+						{ label: 'Storage', slug: 'guides/storage' },
 					],
 				},
 				{
