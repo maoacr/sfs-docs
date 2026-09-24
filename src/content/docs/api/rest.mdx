@@ -196,8 +196,9 @@ X-CSRF-Token: <token>
 |---|---|---|---|---|---|
 | `GET` | `/api/reservas` | ✅ | default | ❌ | Lista reservas (owner ve sus canchas, player ve las propias) |
 | `POST` | `/api/reservas` | ✅ | 10/min | ✅ | Crea una reserva (estado: `PENDIENTE_PAGO`) |
-| `PUT` | `/api/reservas/[id]` | ✅ | default | ⚠️ pendiente | Cambia estado (`CANCELADA` aplica política de reembolso; `COMPLETADA` solo el dueño) |
-| `POST` | `/api/reservas/liberar-expiradas` | ❌ | default | ❌ | Libera reservas `PENDIENTE_PAGO` que excedieron TTL (15 min) |
+| `PUT` | `/api/reservas/[id]` | ✅ | default | ✅ | Cambia estado (`CANCELADA` aplica política de reembolso; `COMPLETADA` solo el dueño) |
+
+Un id de la ruta que no es UUID responde `404` sin consultar la base.
 
 ### GET query params
 

@@ -85,9 +85,16 @@ import { apiFetch } from "@/lib/api-client";
 await apiFetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body });
 ```
 
-:::caution
-Las rutas que no usan `apiHandler` (complejos/[id], canchas/[id], slots, tarifas, imágenes, `PUT /api/reservas/[id]`, sync) todavía **no validan** el token. La cookie de sesión `SameSite=strict` mitiga el riesgo, pero están pendientes de migrar a `apiHandler`.
-:::
+### Cobertura
+
+**Todas las rutas con sesión pasan por `apiHandler`**, así que todas validan el token en métodos que escriben. Las únicas excepciones son deliberadas:
+
+| Ruta | Por qué no usa CSRF |
+|---|---|
+| `POST /api/auth/login`, `POST /api/auth/register` | No hay sesión todavía |
+| `POST /api/auth/logout` | Con la sesión vencida no hay token que obtener y el usuario tiene que poder salir |
+| `GET /api/cron/liberar-expiradas` | La llama Vercel Cron; se autentica con `CRON_SECRET` |
+| `POST /api/webhooks/mercadopago` | La llama MercadoPago; se autentica con la firma HMAC |
 
 ### Excepciones
 

@@ -120,9 +120,8 @@ Las reservas en estado `PENDIENTE_PAGO` o `PAGO_PARCIAL` tienen un tiempo máxim
 2. **Limpieza oportunista** — se ejecuta al:
    - Consultar disponibilidad (`GET /api/disponibilidad`)
    - Crear una nueva reserva (`POST /api/reservas`)
-   - Manualmente vía `POST /api/reservas/liberar-expiradas`
 
-Si la reserva tenía pagos aprobados vía MercadoPago, se reembolsan automáticamente al expirar.
+Solo expiran las reservas `PENDIENTE_PAGO` (sin ningún pago aprobado). Si MercadoPago aprueba un pago **después** de que la reserva expiró, el webhook lo reembolsa automáticamente.
 
 ### Notificaciones de expiración
 
