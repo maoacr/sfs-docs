@@ -1,97 +1,76 @@
 ---
 title: Manejo de Zonas Horarias
-description: Reglas y decisiones sobre timezone en SFS — por qué hora local, cómo evitar bugs con fechas, y qué NO hacer.
+description: Cómo maneja SFS las zonas horarias — instantes en UTC, horarios en la zona de la cancha, y qué NO hacer.
 ---
 
-Todo el sistema SFS opera en **hora local de Colombia (UTC-5)**. Esta página documenta el porqué, las reglas, y los errores comunes.
+Una reserva ocurre en un lugar físico. Por eso **toda hora de negocio se interpreta en la zona horaria de la cancha**, no en la del servidor ni en la de quien mira la pantalla.
 
-## Decisión de diseño
+## El modelo
 
-SFS está orientado al mercado colombiano como target primario. Usar hora local en vez de UTC simplifica:
+| Qué | Dónde vive | Ejemplo |
+|---|---|---|
+| Instante de una reserva | `timestamptz` en UTC (`reservas.slot_inicio`) | `2026-09-26T00:00:00Z` |
+| Zona de la cancha | `complejos.zona_horaria` (nombre IANA, default `America/Bogota`) | `America/Bogota` |
+| Horarios, tarifas, "el día" | Hora local de la cancha | abre `07:00`, reserva `2026-09-25 19:00` |
 
-- Los dueños configuran horarios en su hora natural ("abro de 8am a 11pm")
-- Los jugadores ven slots en hora local sin conversión mental
-- Las queries de base de datos no requieren conversión de timezone
+El instante `2026-09-26T00:00:00Z` y "viernes 25 a las 19:00 en Bogotá" son **el mismo momento**. La base guarda el primero; el usuario siempre ve el segundo.
 
-Si en el futuro SFS escala a múltiples países, se migrará a un modelo con `timezone` por complejo y almacenamiento UTC.
+### Por qué IANA y no "UTC-5"
 
-## Regla de oro
+Un offset fijo sirve para Colombia porque no tiene horario de verano, pero México, Chile o Paraguay cambian de offset durante el año. `America/Santiago` es UTC-4 en julio y UTC-3 en octubre: guardando el nombre de la zona, el runtime resuelve el offset correcto para cada fecha.
 
-> **NUNCA usar el sufijo `Z` al construir fechas con `new Date()` a partir de valores de hora local.**
+### Por qué la zona de la cancha y no la del usuario
 
-### ❌ Incorrecto
+Si un jugador en Madrid mira una cancha de Bogotá, tiene que ver "19:00": el partido se juega en Bogotá. Mostrarle "02:00" (su hora local) le arruina el partido.
+
+## Reglas
+
+1. **Nunca construyas un instante con `new Date("2026-09-25T19:00:00")`**, con o sin `Z`. Sin `Z` usa la zona **de la máquina que ejecuta el código**: en tu laptop en Colombia funciona, en Vercel (UTC) no.
+2. **Convertí siempre con la zona del complejo** usando `src/lib/zona-horaria.ts`.
+3. **El cliente manda fecha y hora locales; el servidor calcula el instante.** `POST /api/reservas` recibe `{ canchaId, fecha, hora }` y usa la zona y la duración del turno de la cancha.
+4. **Para mostrar, formateá con la zona de la cancha**: las respuestas de la API incluyen `zonaHoraria` junto a cada reserva.
+5. **Los filtros por día los resuelve Postgres**: `(slot_inicio AT TIME ZONE complejos.zona_horaria)::date = fecha` (ver `src/lib/consultas.ts`).
+
+## Helpers (`src/lib/zona-horaria.ts`)
+
+Isomórficos (servidor y cliente), solo con `Intl` nativo:
+
+| Función | Qué hace |
+|---|---|
+| `aInstante(fecha, hora, zona)` | `"2026-09-25"`, `"19:00"`, `America/Bogota` → `2026-09-26T00:00:00Z` |
+| `partesEnZona(instante, zona)` | Inversa: instante → `{ fecha, hora }` locales |
+| `formatearHora(instante, zona)` / `formatearFecha(...)` | Formato `es-CO` en la zona indicada |
+| `fechaHoy(zona?)` | Fecha de hoy en la zona (o del reloj local, para selectores de fecha) |
+| `fechaDeCalendario(date)` | Día de calendario de un `Date` local, sin pasar por UTC |
+| `ventanaDelDia(fecha)` | Rango UTC que cubre ese día en cualquier zona (prefiltro SQL) |
+| `esZonaHorariaValida(zona)` | Valida nombres IANA |
 
 ```ts
-// Esto crea 18:00 UTC = 13:00 hora Colombia
-const apertura = new Date("2026-08-06T18:00:00Z");
+// ❌ MAL: depende del reloj del servidor (UTC en Vercel)
+const inicio = new Date(`${fecha}T${hora}:00`);
+
+// ✅ BIEN: explícito en la zona de la cancha
+const inicio = aInstante(fecha, hora, complejo.zonaHoraria);
 ```
 
-### ✅ Correcto
-
 ```ts
-// Esto crea 18:00 hora local (Colombia)
-const apertura = new Date("2026-08-06T18:00:00");
-```
+// ❌ MAL: "hoy" en UTC — después de las 19:00 en Colombia ya es mañana
+const hoy = new Date().toISOString().slice(0, 10);
 
-## Cómo funciona
-
-### Almacenamiento (PostgreSQL)
-
-Las columnas `Timestamptz` almacenan el timestamp en UTC internamente. PostgreSQL convierte automáticamente al insertar/leer según el `timezone` de la sesión.
-
-### Lectura (Drizzle)
-
-Drizzle devuelve objetos `Date` de JavaScript para las columnas `timestamp`. Un `Date` en JavaScript **siempre** representa un instante en UTC internamente (milisegundos desde epoch), pero sus métodos como `getHours()` usan la zona horaria local del sistema.
-
-### El bug clásico (y cómo evitarlo)
-
-```ts
-// 🐛 BUG: "Z" fuerza interpretación UTC
-// Si el dueño configuró apertura a las 18:00 (6pm Colombia)
-const hora = 18;
-const fecha = "2026-08-06";
-
-// ❌ MAL: 18:00 UTC = 13:00 Colombia
-const apertura = new Date(`${fecha}T${hora}:00:00Z`);
-// → Los slots se generan desde las 13:00
-
-// ✅ BIEN: 18:00 hora local
-const apertura = new Date(`${fecha}T${hora}:00:00`);
-// → Los slots se generan desde las 18:00
-```
-
-### Serialización para API
-
-Los endpoints devuelven fechas en ISO 8601 (UTC) mediante `toISOString()`. El frontend las convierte a hora local para mostrar:
-
-```ts
-// API response
-{ "inicio": "2026-08-06T23:00:00.000Z" }
-
-// Frontend display (hora Colombia)
-new Date("2026-08-06T23:00:00.000Z").toLocaleTimeString("es-CO", {
-  hour: "2-digit", minute: "2-digit"
-})
-// → "18:00" (6pm Colombia)
+// ✅ BIEN
+const hoy = fechaHoy();
 ```
 
 ## Checklist para nuevas features
 
-Cuando trabajes con fechas en el backend, verificá:
+- [ ] ¿Construyo un instante a partir de fecha/hora? → `aInstante(fecha, hora, zonaHoraria)`
+- [ ] ¿Muestro una hora o fecha? → `formatearHora` / `formatearFecha` con la zona de la cancha
+- [ ] ¿Filtro "por día"? → condición `AT TIME ZONE` en SQL, nunca límites `T00:00:00Z`
+- [ ] ¿Uso `toISOString().slice(0, 10)` para obtener "hoy"? → reemplazar por `fechaHoy()`
+- [ ] ¿Formateo en el servidor (emails, respuestas con texto)? → el servidor corre en UTC: pasá la zona siempre
 
-- [ ] ¿Estoy construyendo fechas manualmente con `new Date()`? → Sin `Z`
-- [ ] ¿Estoy usando `getUTCHours()` para extraer horas de un `Date` que viene de la DB? → Correcto, los timestamps de DB están en UTC
-- [ ] ¿Estoy filtrando por rango de fechas en una query? → Usar hora local para los límites (`"2026-08-06T23:59:59"` sin Z)
-- [ ] ¿Estoy serializando para API? → `toISOString()` es correcto, el frontend se encarga de la conversión
+## Historia del bug
 
-## Stack trace del bug real
-
-Este bug ocurrió en producción (Agosto 2026) y costó 1 hora de debugging:
-
-1. Dueño configura cancha con horario 18:00-23:00
-2. `SlotConfig.horaApertura` se almacena como `1970-01-01T18:00:00.000Z` en PostgreSQL
-3. El código extrae la hora con `getUTCHours()` → `18` ✅
-4. Pero construye la fecha con `new Date("2026-08-06T18:00:00Z")` → 13:00 hora local ❌
-5. Resultado: slots mostrados de 13:00 a 17:00 en vez de 18:00 a 22:00
-
-**Fix**: quitar `Z` de las 3 ocurrencias en `src/app/api/disponibilidad/route.ts` (líneas 50, 78, 79).
+1. **Agosto 2026**: los turnos salían corridos 5 horas. El "fix" fue quitar la `Z` al construir fechas. Funcionó en la máquina de desarrollo, que está en hora de Colombia.
+2. **Septiembre 2026**: el cálculo seguía en UTC. Una cancha que abre a las 07:00 ofrecía el turno a las 02:00 de Bogotá, el precio se calculaba con la hora UTC y las reservas de la noche aparecían en el día siguiente.
+3. **Solución**: `zona_horaria` por complejo, conversiones explícitas con la zona de la cancha y cálculo del instante en el servidor.

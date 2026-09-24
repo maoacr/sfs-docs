@@ -82,13 +82,15 @@ La Fase 1 quedó marcada como completa, pero el flujo de pago real no funcionaba
 | **E.5** | Firma del webhook con `request-id`; idempotencia con transacción y `FOR UPDATE` | ✅ |
 | **E.6** | TTL solo expira `PENDIENTE_PAGO`; reembolso de pagos aprobados tras expirar | ✅ |
 | **E.7** | Cancelación unificada con política de reembolso (`src/lib/cancelacion.ts`) | ✅ |
+| **E.7b** | Zona horaria por complejo: turnos, precios, filtros por día, emails y UI en la hora de la cancha | ✅ |
 | **E.8** | Probar pago real en sandbox con buyer test user y túnel público | 🔴 |
 | **E.9** | Merge a `main` y deploy | 🔴 |
 
 **Verificación**:
-- `pnpm test` → 55/55 pasan
+- `pnpm test` → 69/69 pasan
 - `tsc --noEmit` → 0 errores
 - Webhook con dos notificaciones concurrentes del mismo pago → se aplica una sola vez
+- Reserva 19:00 en Bogotá → `slot_inicio` 00:00 UTC del día siguiente, listada en su día local
 
 ---
 

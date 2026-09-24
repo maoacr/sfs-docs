@@ -203,7 +203,7 @@ X-CSRF-Token: <token>
 
 | Parámetro | Tipo | Descripción |
 |---|---|---|
-| `fecha` | `YYYY-MM-DD` | Filtra por día |
+| `fecha` | `YYYY-MM-DD` | Filtra por día **en la zona horaria del complejo** de cada reserva |
 | `estado` | `PENDIENTE_PAGO\|CONFIRMADA\|COMPLETADA\|CANCELADA` | Filtra por estado |
 
 ### Crear reserva
@@ -214,18 +214,22 @@ X-CSRF-Token: <token>
 
 {
   "canchaId": "uuid",
-  "slotInicio": "2026-08-10T18:00:00Z",
-  "slotFin": "2026-08-10T19:00:00Z"
+  "fecha": "2026-09-25",
+  "hora": "19:00"
 }
 
 // OWNER puede incluir:
 {
   "canchaId": "uuid",
-  "slotInicio": "2026-08-10T18:00:00Z",
-  "slotFin": "2026-08-10T19:00:00Z",
+  "fecha": "2026-09-25",
+  "hora": "19:00",
   "playerId": "uuid"
 }
 ```
+
+`fecha` y `hora` son **hora local de la cancha**. El servidor calcula el instante con `complejos.zona_horaria` y el fin con `duracionSlotMinutos`. Ejemplo: `2026-09-25 19:00` en `America/Bogota` se guarda como `slotInicio: 2026-09-26T00:00:00Z`.
+
+**Validaciones**: el turno debe estar dentro del horario de apertura de ese día (`400` si no) y, para jugadores, no puede estar en el pasado.
 
 ## Disponibilidad
 
