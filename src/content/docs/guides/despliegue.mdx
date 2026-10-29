@@ -1,0 +1,164 @@
+---
+title: Despliegue
+description: Cómo se despliega SFS en Vercel — variables de entorno, límites de cron, protección de deployments, DNS con Cloudflare y migración de dominio.
+---
+
+SFS web se despliega en **Vercel** desde el repo `maoacr/sfs-web`. La rama de producción es `main`.
+
+| | |
+|---|---|
+| Proyecto | `sfs-web` |
+| Rama de producción | `main` |
+| Framework | `nextjs` (explícito, no autodetectado) |
+| URL | `https://sfs-web-maoacrs-projects.vercel.app` |
+| Cron | `0 4 * * *` → `/api/cron/liberar-expiradas` |
+
+## Variables de entorno
+
+El runtime necesita estas. Todas van en el entorno **Production** del proyecto.
+
+| Variable | Para qué | Dónde se lee |
+|---|---|---|
+| `DATABASE_URL` | Conexión a Postgres vía pooler de Supabase | `packages/db/src/client.ts` |
+| `JWT_SECRET` | Firma del access token | `src/lib/jwt.ts` |
+| `JWT_REFRESH_SECRET` | Firma del refresh token | `src/lib/jwt.ts` |
+| `SUPABASE_URL` | Endpoint de Supabase | `src/lib/supabase.ts` |
+| `SUPABASE_ANON_KEY` | Clave pública de Supabase | `src/lib/supabase.ts` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Clave de servicio (Storage) | `src/lib/supabase.ts` |
+| `MP_ACCESS_TOKEN` | SDK de MercadoPago | `src/lib/mercadopago.ts` |
+| `MP_WEBHOOK_SECRET` | Verificación de firma del webhook | `src/lib/mercadopago.ts` |
+| `NEXT_PUBLIC_APP_URL` | `back_urls` y `notification_url` de MP | `src/lib/mercadopago.ts` |
+| `RESEND_API_KEY` | Emails transaccionales | `src/lib/email.ts` |
+| `CRON_SECRET` | Autoriza el job de expiración | `src/app/api/cron/liberar-expiradas/route.ts` |
+
+Opcionales: `DB_MAX_CONNECTIONS` (default 10) y `EMAIL_FROM` (tiene fallback).
+
+`DIRECT_URL` **no hace falta en Vercel**: sólo la usan `drizzle-kit` y los scripts de migración en local. Apunta a `db.<ref>.supabase.co:5432`, que en el plan Free sólo resuelve por IPv6.
+
+:::danger[Las variables van antes del primer build]
+Hay páginas que consultan la base durante el build. Si deployás sin las variables, el build no falla con un claro "falta `DATABASE_URL`": falla en una página cualquiera y te manda a buscar al lugar equivocado.
+:::
+
+### Subirlas sin exponer los valores
+
+```bash
+# Los valores pasan por stdin: nunca se imprimen ni quedan en el historial.
+printf '%s' "$VALOR" | vercel env add NOMBRE production --force
+```
+
+El CLI las crea como `sensitive`, así que después **no se pueden volver a leer** desde el dashboard. Guardalas en otro lado.
+
+## `CRON_SECRET`: el nombre importa
+
+Vercel inyecta el header `Authorization: Bearer <valor>` en las invocaciones de cron **sólo si existe una variable llamada exactamente `CRON_SECRET`**.
+
+Con cualquier otro nombre —`MP_CRON_SECRET`, `JOB_SECRET`— el cron corre, no manda header, y la ruta responde `401`. El dashboard muestra la ejecución como exitosa: el job "corrió", simplemente no hizo nada. No hay error en ningún lado.
+
+```bash
+openssl rand -hex 32 | vercel env add CRON_SECRET production --force
+```
+
+## Límite de crons en el plan Hobby
+
+**Hobby admite un cron por día.** Un `vercel.json` que pida más hace fallar el deployment entero:
+
+```
+400 cron_jobs_limits_reached
+```
+
+No es un warning ni una degradación: no buildea.
+
+Por eso el TTL de reservas no depende del cron. La expiración se evalúa en la consulta y el job quedó como housekeeping diario. Ver [Flujo de Reservas](/vision/flujo-reservas#ttl--liberación-del-turno).
+
+## Protección de deployments
+
+Los proyectos nuevos de Vercel vienen con **Vercel Authentication activada** para todos los deployments excepto los de dominio propio:
+
+```json
+{ "ssoProtection": { "deploymentType": "all_except_custom_domains" } }
+```
+
+Eso intercepta **toda** request con una pantalla de login antes de que llegue al código. El webhook de MercadoPago comería `401` sin tocar nunca el handler.
+
+La configuración correcta para una app de cara al público:
+
+```json
+{ "ssoProtection": { "deploymentType": "preview" } }
+```
+
+Producción pública, previews protegidos.
+
+:::caution[Un síntoma, tres capas]
+Que MercadoPago "no llegue" ya pasó tres veces en este proyecto, cada vez en una capa distinta:
+
+1. `src/proxy.ts` redirigía `/api/webhooks/` a `/auth/login`
+2. Vercel Authentication devolvía `401` antes del handler
+3. El WAF de Cloudflare desafía POSTs de servidores
+
+Las tres fallan **en silencio**: MP reintenta, el log del handler queda vacío, y parece un problema de firma. Al diagnosticar un webhook mudo, revisá las capas de adelante antes que el código.
+:::
+
+## DNS con Cloudflare
+
+El patrón del proyecto es Cloudflare por delante vía `CNAME`.
+
+1. Agregá el dominio en Vercel y creá el `CNAME` en Cloudflare **en DNS-only (nube gris)**, para que Vercel pueda emitir el certificado.
+2. Si después querés proxy (nube naranja), el modo SSL de Cloudflare tiene que ser **Full (strict)**. En *Flexible* se produce un loop infinito de redirects contra Vercel.
+3. **Regla de WAF que saltee `/api/webhooks/*`.** Bot Fight Mode y las managed rules desafían POSTs de servidores; MercadoPago no resuelve challenges de JS.
+4. **Nunca "Cache Everything" sobre `/api/*`**: le servirías la respuesta de un usuario a otro.
+5. Detrás del proxy, el rate limiting por IP tiene que leer `CF-Connecting-IP`. El primer elemento de `x-forwarded-for` lo controla el cliente: Cloudflare *anexa* la IP real a lo que el cliente haya mandado.
+
+Los **Vercel Cron no pasan por Cloudflare**: Vercel invoca la función contra la URL del deployment, no contra el dominio público. Los jobs no se ven afectados por el DNS.
+
+## Migrar a un dominio propio
+
+Son unos 30 minutos, y es casi todo configuración:
+
+1. `CNAME` en Cloudflare → el dominio en Vercel → esperar el certificado
+2. `NEXT_PUBLIC_APP_URL` = nuevo dominio
+3. Redeploy (la variable se hornea en el build)
+4. Actualizar la URL del webhook en el panel de MercadoPago
+5. Opcional: verificar el dominio nuevo en Resend y setear `EMAIL_FROM`
+
+Sale barato porque **el dominio vive sólo en configuración**: `NEXT_PUBLIC_APP_URL` se usa en un único archivo y las columnas `url` de la base apuntan a Supabase Storage, no a la app. Si se guardaran URLs absolutas en filas, esto sería un `UPDATE` masivo sobre datos de producción.
+
+Dos efectos a tener en cuenta:
+
+- **Las preferencias de pago vivas** tienen las `back_urls` horneadas. Quien haya abierto el checkout y no haya pagado vuelve a una URL muerta. Se resuelve dejando el dominio viejo redirigiendo una hora.
+- **Las cookies son host-scoped**: todos se deslogean una vez.
+
+## Verificar un deploy
+
+Que el build diga *Ready* no prueba que la app funcione. Esto sí:
+
+```bash
+U=https://sfs-web-maoacrs-projects.vercel.app
+
+# La app responde (307 → /auth/login → 200)
+curl -sL -o /dev/null -w "%{http_code} %{url_effective}\n" "$U/"
+
+# El 401 lo da NUESTRO código, no el muro de Vercel:
+# tiene que ser JSON, no HTML de login
+curl -s "$U/api/cron/liberar-expiradas"
+# → {"error":"No autorizado"}
+
+# El webhook es alcanzable: responde NUESTRO handler
+curl -s -X POST -H 'Content-Type: application/json' -d '{"type":"ping"}' \
+  "$U/api/webhooks/mercadopago"
+# → {"error":"Falta data.id"}
+
+# La base responde: email inexistente da 401, no 500
+curl -s -X POST -H 'Content-Type: application/json' \
+  -d '{"email":"noexiste@example.com","password":"x"}' "$U/api/auth/login"
+# → {"error":"Email o contraseña incorrectos"}
+```
+
+Lo que distingue un endpoint sano de uno bloqueado por una capa de adelante es **quién contesta**: si el cuerpo es JSON de la aplicación, la request llegó.
+
+Para el cron, además:
+
+```bash
+vercel api "/v9/projects/<projectId>?teamId=<teamId>" \
+  | sed -n '/^{/,$p' | jq '.crons'
+# enabledAt seteado, disabledAt null, definitions con path y schedule
+```

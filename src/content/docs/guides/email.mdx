@@ -27,13 +27,32 @@ Para enviar desde tu propio dominio:
 
 1. Dashboard → **Domains** → **Add Domain**
 2. Agregá los registros DNS que Resend te indica (MX, DKIM, SPF)
-3. Una vez verificado, actualizá el `FROM` en `src/lib/email.ts`:
+3. Una vez verificado, seteá el remitente por variable de entorno:
 
-```ts
-const FROM = "SFS <notificaciones@tudominio.com>";
+```bash
+EMAIL_FROM="SFS <notificaciones@tudominio.com>"
 ```
 
+El formato es RFC 5322: `Nombre visible <dirección@dominio>`. Las comillas hacen falta porque el valor tiene espacios y `<>`.
+
+`src/lib/email.ts` lo lee con un fallback, así que no es obligatoria:
+
+```ts
+const FROM = process.env.EMAIL_FROM ?? "SFS <notificaciones@maoacr.com>";
+```
+
+Dos cosas que conviene saber:
+
+- La parte local (`notificaciones@`) **no necesita existir como buzón**. Resend envía desde cualquier dirección de un dominio verificado.
+- El dominio **sí** tiene que estar verificado en Resend, o el envío se rechaza.
+
 Para desarrollo/test, podés usar `onboarding@resend.dev` sin verificar dominio (solo envía a tu email registrado).
+
+:::caution[Las respuestas se pierden]
+Si el dominio tiene *Receiving* deshabilitado en Resend —el caso por defecto— los mails que un usuario mande con "Responder" no llegan a ningún lado.
+
+Antes de tener usuarios reales: o configurás un `reply-to` a un buzón que alguien lea, o usás un `no-reply@` explícito para que nadie espere respuesta. Lo peor es el estado intermedio: parece contestable y no lo es.
+:::
 
 ## Templates
 

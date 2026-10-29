@@ -67,11 +67,35 @@ Double-submit cookie pattern: el servidor genera un token aleatorio y lo envía 
 
 | Cookie | HttpOnly | SameSite | Secure | Propósito |
 |--------|----------|----------|--------|-----------|
-| `sfs_token` | ✅ | strict | prod | JWT access token |
-| `sfs_refresh` | ✅ | strict | prod | JWT refresh token |
+| `sfs_token` | ✅ | **lax** | prod | JWT access token |
+| `sfs_refresh` | ✅ | **lax** | prod | JWT refresh token |
 | `csrf_token` | ❌ | strict | prod | Token CSRF (legible por JS) |
 
 `csrf_token` NO es HttpOnly porque el frontend necesita leerlo para enviarlo como header.
+
+La política de las cookies de sesión vive en un solo lugar, `src/lib/cookies.ts`, y está cubierta por tests. Antes estaba copiada a mano en los cuatro `cookies.set` de login y register, que es exactamente cómo un atributo así termina desincronizado entre rutas.
+
+### Por qué `lax` y no `strict`
+
+`SameSite` decide **cuándo el browser adjunta la cookie**, según dónde nació la request:
+
+| Valor | La cookie viaja… |
+|---|---|
+| `strict` | Sólo si la request nace en el propio sitio. |
+| `lax` | Igual que `strict`, **más** las navegaciones de nivel superior con método seguro (GET). |
+| `none` | Siempre, cross-site incluido. Exige `Secure`. |
+
+MercadoPago devuelve al jugador con un redirect a `back_urls` — una navegación de nivel superior con GET que nace en `mercadopago.com`. Con `strict` el browser **no** manda `sfs_token`, el proxy no ve sesión, y el jugador aterriza en `/auth/login` justo después de haber pagado, creyendo que el pago falló.
+
+`lax` no debilita la defensa: la cookie sigue sin viajar en `POST`/`PUT`/`DELETE` cross-site ni en subrecursos (imágenes, iframes, `fetch`), que es el vector real de CSRF. Y la protección no descansa en este atributo: toda escritura valida además el double-submit token. `lax` es, además, el valor por defecto de los browsers desde 2020.
+
+:::caution[Condición que impone `lax`]
+**Ningún `GET` puede cambiar estado.** Como `lax` sí manda la cookie en navegaciones GET cross-site, un endpoint tipo `GET /api/borrar?id=…` quedaría expuesto a que alguien mande el link.
+
+Hoy se cumple: el único `GET` que escribe es `/api/cron/liberar-expiradas`, y se autentica con `CRON_SECRET`, no con cookie.
+:::
+
+`csrf_token` se queda en `strict` **a propósito**: no hace falta en la vuelta cross-site, y `SameSite` no afecta a `document.cookie`, así que el cliente la sigue leyendo. No unificar las dos políticas "por consistencia".
 
 ### Obtención del token
 

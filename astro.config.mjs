@@ -46,6 +46,7 @@ export default defineConfig({
 				{
 					label: 'Guías',
 					items: [
+						{ label: 'Despliegue', slug: 'guides/despliegue' },
 						{ label: 'Seguridad', slug: 'guides/security' },
 						{ label: 'MercadoPago', slug: 'guides/mercadopago' },
 						{ label: 'Email (Resend)', slug: 'guides/email' },

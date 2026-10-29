@@ -57,12 +57,35 @@ La generación itera desde `apertura` sumando `duracionSlotMinutos` hasta que `c
 
 ### Paso 3: Verificación de solapamiento
 
-Cada slot generado se cruza con las reservas existentes (`PENDIENTE_PAGO` o `CONFIRMADA`) del día. La lógica de solapamiento es:
+Cada slot generado se cruza con las reservas que **ocupan** el turno ese día. La lógica de solapamiento es:
 
 ```ts
 // Hay conflicto si los intervalos se superponen
 hayConflicto = slotInicio < reservaFin && slotFin > reservaInicio
 ```
+
+### Qué reserva ocupa un turno
+
+No alcanza con mirar el estado: un `PENDIENTE_PAGO` también tiene edad. La decisión vive en `reservaBloqueaTurno()` (`src/lib/disponibilidad.ts`):
+
+| Estado | ¿Ocupa el turno? |
+|---|---|
+| `CONFIRMADA` | Siempre |
+| `PAGO_PARCIAL` | Siempre — ya pagó el mínimo, nunca expira |
+| `PENDIENTE_PAGO` | Sólo dentro del TTL de 15 minutos |
+| `CANCELADA`, `EXPIRADA`, `COMPLETADA` | Nunca |
+
+```ts
+if (ESTADOS_QUE_SIEMPRE_OCUPAN.includes(reserva.estado)) return true;
+if (reserva.estado !== ESTADO_QUE_VENCE) return false;
+if (reserva.createdAt == null) return true;   // sin edad, no se libera
+return creadaEn > limiteExpiracion(nowTimestamp).getTime();
+```
+
+Dos decisiones deliberadas:
+
+- **Sin `createdAt` la reserva sigue ocupando.** Nunca se libera un turno por falta de información. Lo mismo si la fecha no se puede parsear.
+- **`POST /api/reservas` aplica la misma regla en SQL** (`reservaOcupaElTurno`, en `src/lib/consultas.ts`), armada con las mismas constantes. Si la lectura y la escritura discreparan, la grilla mostraría el turno libre y la reserva fallaría con `409`.
 
 Esto cubre todos los casos:
 - Reserva que empieza antes y termina durante el slot ✅

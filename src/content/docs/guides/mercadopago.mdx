@@ -59,9 +59,14 @@ Usá estas tarjetas en el checkout de MP (después de loguearte con el buyer):
 | Visa | `4013 5406 8274 6260` | `123` | `11/30` | ✅ Aprobada |
 | Visa Débito | `4915 1120 5524 6507` | `123` | `11/30` | ✅ Aprobada |
 
-### 4. Recibir webhooks en local
+### 4. Recibir webhooks
 
-MP no puede llamar a `localhost`. Para probar el flujo completo en tu máquina, exponé el dev server con un túnel (por ejemplo `cloudflared` o `ngrok`) y usá esa URL pública como `NEXT_PUBLIC_APP_URL` y como URL del webhook en el panel.
+MP no puede llamar a `localhost`. Hay dos caminos:
+
+- **Contra el deployment** (recomendado): ya existe una URL pública de producción. Apuntá el webhook del panel ahí y probá con credenciales `TEST-`. No hace falta túnel.
+- **Contra tu máquina**: exponé el dev server con un túnel (`cloudflared`, `ngrok`) y usá esa URL pública como `NEXT_PUBLIC_APP_URL` y como URL del webhook.
+
+Ver [Despliegue](/guides/despliegue) para la URL y la verificación de que el endpoint es alcanzable.
 
 ### 5. Probar el flujo
 
@@ -90,6 +95,23 @@ En el panel de MP → Tu aplicación → **Webhooks**:
 | Clave secreta | La genera MP — copiala a `MP_WEBHOOK_SECRET` |
 
 `/api/webhooks/` es una ruta pública en `src/proxy.ts`: MP llama sin cookie de sesión, así que la autenticación es la firma. Si la ruta no fuera pública, el proxy redirigiría a `/auth/login` y el handler nunca se ejecutaría.
+
+:::caution[El proxy no es la única capa que puede comerse el webhook]
+Que MP "no llegue" ya pasó tres veces, cada vez en una capa distinta y **siempre en silencio**:
+
+1. `src/proxy.ts` redirigía `/api/webhooks/` a `/auth/login`
+2. **Vercel Authentication** devolvía `401` antes de ejecutar el handler
+3. El **WAF de Cloudflare** desafía POSTs de servidores — MP no resuelve challenges de JS
+
+El síntoma es idéntico en los tres casos: MP reintenta, el log del handler queda vacío, y parece un problema de firma. Antes de revisar la firma, comprobá **quién contesta**:
+
+```bash
+curl -s -X POST -H 'Content-Type: application/json' -d '{"type":"ping"}' \
+  https://tu-dominio/api/webhooks/mercadopago
+# JSON de la app → la request llegó
+# HTML de login  → una capa de adelante la frenó
+```
+:::
 
 ### Verificación de firma
 
@@ -160,6 +182,16 @@ Para pasar a producción:
 2. Configurá la URL del webhook con tu dominio real y copiá la clave secreta que genera MP
 3. Asegurate de que `NEXT_PUBLIC_APP_URL` apunte al dominio de producción
 4. Los test users y tarjetas de prueba **no funcionan en producción**
+
+:::note[`NEXT_PUBLIC_APP_URL` se hornea en el build]
+Tiene prefijo `NEXT_PUBLIC_`, así que su valor queda fijado al compilar. Cambiarla exige **redeploy**, no basta con editarla. Y las preferencias de pago ya creadas conservan las `back_urls` viejas: ver [migrar a un dominio propio](/guides/despliegue#migrar-a-un-dominio-propio).
+:::
+
+### La vuelta del checkout y las cookies
+
+MP devuelve al jugador con un redirect a `back_urls` — una navegación que **nace en `mercadopago.com`**. Las cookies de sesión están en `SameSite=lax` precisamente por eso: con `strict` el browser no las adjunta, el proxy no ve sesión, y el jugador cae en `/auth/login` justo después de pagar.
+
+Si alguna vez ves ese síntoma —"pagué y me deslogueó"— mirá el atributo `SameSite` antes que el flujo de pago. Detalle en [Seguridad](/guides/security#por-qué-lax-y-no-strict).
 
 ## Archivos clave
 

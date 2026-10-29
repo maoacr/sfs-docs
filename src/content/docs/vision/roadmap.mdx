@@ -16,7 +16,7 @@ Establece los cimientos de seguridad, validación y testing. Sin esto, todo lo d
 | **0.1** | Zod en todas las API routes — validación de inputs en runtime | P0 | ✅ |
 | **0.2** | Rate limiting — protección contra abuso y brute force | P0 | ✅ |
 | **0.3** | Tenant isolation — filtro por `tenantId` (explícito por query desde la migración a Drizzle) | P0 | ✅ |
-| **0.4** | CSRF protection — double-submit cookie + SameSite=strict | P0 | ✅ |
+| **0.4** | CSRF protection — double-submit cookie; sesión en `SameSite=lax`, `csrf_token` en `strict` | P0 | ✅ |
 | **0.5** | Test suite inicial — Vitest + 14 tests de schemas | P0 | ✅ |
 
 **Verificación**:
@@ -45,7 +45,7 @@ Implementa la lógica de pricing, pagos con MercadoPago Checkout Pro, TTL real, 
 | **1.1** | Motor de precios dinámicos — `tarifas` + `promociones` → precio final | P0 | ✅ |
 | **1.2** | MercadoPago Checkout Pro + Webhooks con firma HMAC | P0 | ✅ |
 | **1.2b** | Split Payments 85/15 — requiere OAuth de marketplace con las cuentas de los dueños | P1 | 🔴 |
-| **1.3** | TTL de reservas — limpieza oportunista + Vercel Cron cada 5 min | P0 | ✅ |
+| **1.3** | TTL de reservas — expiración evaluada en la consulta; el cron quedó como housekeeping diario | P0 | ✅ |
 | **1.4** | Políticas de cancelación y reembolso configurables por complejo | P0 | ✅ |
 | **1.5** | Emails transaccionales — Resend con templates HTML | P0 | ✅ |
 | **1.6** | Modelo de Partidos — pagos compartidos entre jugadores | P1 | ✅ |
@@ -85,8 +85,13 @@ La Fase 1 quedó marcada como completa, pero el flujo de pago real no funcionaba
 | **E.7b** | Zona horaria por complejo: turnos, precios, filtros por día, emails y UI en la hora de la cancha | ✅ |
 | **E.7c** | CSRF desde el cliente (`apiFetch`) y todas las rutas con sesión en `apiHandler` | ✅ |
 | **E.7d** | Storage: bucket público `canchas` y privado `sfs`, versionados en la migración `0003` ([guía](/guides/storage)) | ✅ |
-| **E.8** | Probar pago real en sandbox con buyer test user y túnel público | 🔴 |
-| **E.9** | Merge a `main` y deploy | 🔴 |
+| **E.8** | Probar pago real en sandbox con buyer test user | 🔴 |
+| **E.9** | Merge a `main` y deploy en Vercel ([guía](/guides/despliegue)) | ✅ |
+| **E.10** | RLS deny-by-default en las 15 tablas de `public` (migración `0004`) | ✅ |
+| **E.11** | Keepalive de Supabase en GitHub Actions — evita la pausa por inactividad | ✅ |
+| **E.12** | Expiración del TTL en la consulta: el turno se libera sin depender del cron | ✅ |
+| **E.13** | `SameSite=lax` en las cookies de sesión — con `strict`, la vuelta de MercadoPago caía en `/auth/login` | ✅ |
+| **E.14** | Lectura y escritura comparten la regla de ocupación del turno (evita grilla libre + `409`) | ✅ |
 
 **Verificación**:
 - `pnpm test` → 81/81 pasan
