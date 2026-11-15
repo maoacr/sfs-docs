@@ -102,3 +102,38 @@ En desarrollo, si `RESEND_API_KEY` no está configurada, los emails se skippean 
 ```
 
 Para ver todos los emails enviados (incluyendo fallidos), revisá el dashboard de Resend → **Emails**.
+
+## Tracking: apagado, y por qué
+
+El dominio tiene **click tracking y open tracking desactivados**. No es un olvido.
+
+### El click tracking rompía los links de recuperación
+
+Resend reescribe los `href` del HTML para contar clicks, envolviéndolos en su subdominio de tracking:
+
+```
+http://sfs.maoacr.com/CL0/http:%2F%2F…%2Fauth%2Frestablecer%3Ftoken=…
+└──── wrapper de Resend ────┘└──────── el link real ────────┘
+```
+
+El problema: `sfs.maoacr.com` era el subdominio de tracking **y** pasó a ser el hostname de la app. El wrapper apuntaba a un servidor que no sabe qué hacer con `/CL0/`, así que el link moría antes de llegar a Resend.
+
+Hay una segunda razón, independiente del choque de nombres: un token de recuperación pasando por el redirect de un tercero **queda en sus logs de clicks**. Para un mail de seguridad eso no va. Y un link ofuscado en un mail que dice «restablecé tu contraseña» es visualmente indistinguible de phishing.
+
+### La mina del CAA
+
+:::danger[No agregar este registro]
+Resend lista un `CAA` con valor `0 issue "amazon.com"` para su subdominio de tracking. Un CAA **le prohíbe a toda autoridad que no sea la listada** emitir certificados para ese nombre.
+
+Si cae sobre el hostname de la app, **Vercel no puede emitir ni renovar el certificado TLS y HTTPS se rompe en producción**.
+
+El tracking está apagado y el registro no hace falta, pero el dashboard de Resend lo va a seguir mostrando como pendiente. Lo mismo con el CNAME de tracking, que marca `verified` por caché aunque el DNS ya apunte a otro lado.
+:::
+
+### Si algún día querés la métrica
+
+Subdominio **propio** para tracking —`email.tudominio.com`— nunca el de la app. Ahí el CAA es inofensivo porque no hay certificados de Vercel en juego.
+
+De los mails que manda SFS, el click solo informa algo en tres: **reserva pendiente** y **pago parcial** (los dos con TTL y atados a plata: el click dice si la persona fue a pagar) y **¿cómo estuvo?** (pide reseña). Los otros nueve son avisos sin acción, donde un click bajo no es un problema a resolver.
+
+Y un dato para cuando llegue el momento: los **opens son ruido** (Apple Mail Privacy Protection precarga imágenes y genera opens falsos; los clientes que bloquean imágenes generan opens perdidos). El click es la única señal confiable. Cuando recuperes tracking, recuperá el click, no el open.

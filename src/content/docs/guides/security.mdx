@@ -30,20 +30,35 @@ Request entrante
 
 ### Mecanismo
 
-Sliding window en memoria. Cada request se cuenta por IP (vía `x-forwarded-for`) en una ventana de tiempo configurable. Si se excede el límite, el request se rechaza con `429`.
+Sliding window en memoria. Cada request se cuenta por **balde y por cliente** en una ventana de tiempo configurable. Si se excede el límite, el request se rechaza con `429`.
 
 ### Implementación
 
 ```typescript
 // src/lib/rate-limit.ts
 export const RATE_LIMITS = {
-  AUTH_LOGIN:      { maxRequests: 5,  windowMs: 60_000 },  // 5 intentos/min
-  AUTH_REGISTER:   { maxRequests: 3,  windowMs: 60_000 },  // 3 registros/min
-  STRICT:          { maxRequests: 10, windowMs: 60_000 },  // 10/min
-  DISPONIBILIDAD:  { maxRequests: 60, windowMs: 60_000 },  // 1 query/seg
-  DEFAULT:         { maxRequests: 100, windowMs: 60_000 }, // 100/min
+  // `auth` lo comparten /api/auth/login y /api/auth/google a propósito: los dos
+  // son intentos de autenticarse, y el límite es del intento, no del método.
+  AUTH_LOGIN:      { bucket: "auth",           maxRequests: 5,   windowMs: 60_000 },
+  AUTH_REGISTER:   { bucket: "auth_register",  maxRequests: 3,   windowMs: 60_000 },
+  AUTH_RECUPERAR:  { bucket: "auth_recuperar", maxRequests: 3,   windowMs: 15 * 60_000 },
+  STRICT:          { bucket: "strict",         maxRequests: 10,  windowMs: 60_000 },
+  DISPONIBILIDAD:  { bucket: "disponibilidad", maxRequests: 60,  windowMs: 60_000 },
+  DEFAULT:         { bucket: "default",        maxRequests: 100, windowMs: 60_000 },
 };
 ```
+
+La key es `rate:${bucket}:${ip}`, con la IP tomada del primer salto de `x-forwarded-for`.
+
+### Por qué el balde está en la key
+
+Antes la key era solo `rate:${ip}`. Todos los endpoints sumaban al **mismo** contador mientras cada uno lo comparaba contra su propio límite, así que ocho requests normales —que pasan de sobra bajo el límite de 100/min del default— dejaban el contador en ocho, y el primer intento de login se iba en `429` contra su límite de 5.
+
+En la práctica: **un visitante que navegó la app no podía loguearse**, y no tenía forma de entender por qué.
+
+El balde va en la key y el pathname **no**. Incluir la ruta abriría un contador por cada id de las rutas dinámicas (`/api/canchas/<uuid>`), lo que además de filtrar memoria haría esquivable el límite con solo cambiar el id.
+
+`AUTH_RECUPERAR` tiene techo más bajo y ventana más larga porque mandar mails a pedido de cualquiera permite inundar la casilla de otro.
 
 ### Headers
 

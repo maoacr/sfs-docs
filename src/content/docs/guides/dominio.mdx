@@ -1,0 +1,99 @@
+---
+title: Mudanza de dominio
+description: Qué cambiar en Vercel, Supabase y Resend el día que SFS se mude a un dominio propio — y qué no tocar.
+---
+
+Cuatro pasos en tres dashboards, en este orden. **Dos son variables; los otros dos son configuración a mano.** Saberlo antes evita descubrirlo con el dominio comprado y el equipo esperando.
+
+Punto de partida: `sfs.maoacr.com` → proyecto `sfs-web` en Vercel, Supabase sin cambios, envío por Resend desde `maoacr.com` con el tracking apagado.
+
+## 1. Vercel — el dominio
+
+Son **dos capas** y hay que hacer las dos:
+
+- **DNS** dice a dónde ir.
+- **Vercel** necesita el hostname en su tabla para saber qué proyecto sirve ese `Host`.
+
+El CNAME solo no alcanza. Si el dominio no está dado de alta en el proyecto, la request llega al edge de Vercel y no tiene a dónde ir.
+
+Settings → **Domains** → **Add Domain**. Al agregarlo, Vercel te da el registro DNS exacto (un CNAME propio del proyecto, o registros A si es dominio apex) y **emite el certificado TLS**. Sin dar de alta el dominio no hay certificado: el navegador mostraría advertencia de seguridad aunque el routing funcionara.
+
+:::note[Si usás Cloudflare]
+Con **nube gris** (DNS only) no hay nada más que hacer. Con **nube naranja**, revisá que el SSL mode esté en *Full (strict)*: con *Flexible* es clásico terminar en un loop de redirects, porque Cloudflare habla HTTP con Vercel y Vercel redirige a HTTPS.
+:::
+
+## 2. Vercel — la variable
+
+| | |
+|---|---|
+| Variable | `APP_URL` (target `production`) |
+| Valor | `https://tudominio.com` — sin barra final |
+
+La leen `src/lib/mercadopago.ts` para las `back_urls` y el route de recuperación para el link del mail. Las dos del lado del servidor.
+
+Acordate de `.env.local` también, si querés probar en local.
+
+:::danger[Hay que redeployar]
+Las variables de entorno de Vercel aplican a **deployments nuevos**. Cambiar `APP_URL` no afecta al que está corriendo.
+
+Si no redeployás, los links de recuperación siguen apuntando al dominio viejo — y cada mail gasta el único token que la persona pidió. **Es la única falla silenciosa de esta lista**; todo lo demás da un error visible.
+:::
+
+## 3. Supabase — URLs de auth
+
+Esto no es una variable: es configuración del dashboard. Si no se cambia, la vuelta de Google llega sin sesión y `/auth/callback` muestra «No pudimos leer la respuesta de Google».
+
+Authentication → **URL Configuration**:
+
+- **Site URL** → `https://tudominio.com`
+- **Redirect URLs** → agregar `https://tudominio.com/auth/callback`
+
+`http://localhost:3000/auth/callback` se queda siempre: es el que te deja probar. Dejá el del dominio viejo hasta confirmar que el nuevo anda, y recién después quitalo.
+
+:::tip[Nada de código]
+El botón de Google manda `redirectTo: ${window.location.origin}/auth/callback`, que sale del navegador en runtime. El dominio no está escrito en ninguna parte del código.
+:::
+
+## 4. Resend — opcional
+
+Los mails pueden seguir saliendo de `maoacr.com` sin tocar nada: **el dominio de envío es independiente del dominio de la app**. Este paso es solo si querés que digan `@tudominio.com`.
+
+1. Resend → **Domains** → **Add Domain**, y agregar los registros DKIM y SPF.
+2. Esperar la verificación.
+3. Recién entonces cambiar `EMAIL_FROM` en Vercel.
+
+Hoy `EMAIL_FROM` no está creada y el valor sale del default de `src/lib/email.ts`. Si cambiás la variable antes de verificar el dominio nuevo, los mails dejan de salir.
+
+Si vas a configurar tracking, leé primero [la mina del CAA](/guides/email/#la-mina-del-caa): el subdominio de tracking **nunca** puede ser el hostname de la app.
+
+## Lo que NO se toca
+
+**Google Cloud Console.** La redirect URI registrada es el callback de **Supabase** (`https://<ref>.supabase.co/auth/v1/callback`), no el de la app. Cambiás de dominio las veces que quieras y ese no se toca nunca. Es el beneficio concreto de usar Supabase como broker de identidad: si el OAuth fuera directo contra Google, cada mudanza obligaría a entrar acá.
+
+**Base de datos y claves de Supabase.** Mismo proyecto: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` y las dos `NEXT_PUBLIC_SUPABASE_*` quedan igual.
+
+**`JWT_SECRET` y `JWT_REFRESH_SECRET`.** No los rotes en la mudanza sin querer: eso invalida todas las sesiones abiertas y mata los links de recuperación en vuelo.
+
+**Las credenciales de MercadoPago.** Solo cambian las `back_urls`, y esas salen de `APP_URL`.
+
+**El código.** Ni una línea.
+
+## Verificación
+
+En este orden, porque cada paso depende del anterior:
+
+1. `https://tudominio.com` carga y el candado del navegador está cerrado — eso confirma el certificado.
+2. **Login con Google** entra y termina en `/player/buscar`. Si muestra «No pudimos leer la respuesta de Google», falta el Redirect URL del paso 3.
+3. **Pedí un reset** y mirá el link del mail: tiene que decir `tudominio.com`. Si dice el viejo, falta el redeploy del paso 2.
+4. **Usá ese link**, cambiá la contraseña y entrá con la nueva.
+5. Si tocaste MercadoPago: una reserva de prueba, confirmando que el retorno del pago vuelve al dominio nuevo.
+
+Y la consulta que confirma que el flujo escribió lo que tenía que escribir:
+
+```sql
+select email, rol,
+       google_sub    is not null as vinculada,
+       password_hash is null     as sin_password
+from public.usuarios
+where email = 'tu@email.com';
+```
