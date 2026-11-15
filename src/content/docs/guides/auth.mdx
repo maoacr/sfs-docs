@@ -1,0 +1,188 @@
+---
+title: Autenticación
+description: Las dos puertas de entrada a SFS — contraseña y Google — la recuperación de cuenta, y por qué cada decisión de seguridad es como es.
+---
+
+Hay dos formas de entrar a SFS y **una sola sesión**. Tanto el login con contraseña como el de Google terminan emitiendo el mismo JWT propio en la cookie `sfs_token`.
+
+```
+email + contraseña ──┐
+                     ├──→ JWT propio en sfs_token ──→ la app
+Google (vía Supabase)┘
+```
+
+Esa unificación es deliberada: el dominio no tiene que saber cómo entró la persona.
+
+## Google SSO
+
+### Supabase es un broker, no el dueño de la sesión
+
+Supabase negocia con Google y nos dice quién es la persona. Su fila en `auth.users` es **un recibo que nadie consulta**. La fuente de verdad del dominio sigue siendo `public.usuarios`, que es la que tiene las FKs de reservas, pagos y partidos.
+
+```
+tu app          →  supabase.auth.signInWithOAuth()
+  ↓ redirect
+Supabase        →  /auth/v1/authorize?provider=google
+  ↓ redirect
+Google          →  pantalla de consentimiento
+  ↓ redirect
+Supabase        →  /auth/v1/callback        ← esto autoriza GOOGLE
+  ↓ canje server-to-server con el client_secret
+  ↓ redirect
+tu app          →  /auth/callback           ← esto lo autoriza SUPABASE
+  ↓ POST /api/auth/google
+tu app          →  emite sfs_token
+```
+
+El canje final es client-side porque Supabase devuelve sus tokens en el fragment de la URL (`#access_token=…`), que nunca viaja al servidor. `/auth/callback` lo cambia por nuestras cookies y descarta la sesión de Supabase con `signOut({ scope: "local" })`.
+
+### Del browser solo se acepta el access token
+
+`googleAuthSchema` acepta **únicamente** `accessToken`. El email, el nombre y el `sub` los lee el servidor del token ya verificado contra Supabase. Si vinieran en el body, cualquiera entraría como cualquiera.
+
+Zod descarta las claves extra, y eso es la primera línea de defensa — hay un test dedicado a ese descarte en `src/lib/schemas.test.ts`. Si alguien le pone `.passthrough()` o `z.looseObject()`, ese test falla.
+
+### La regla de vínculo
+
+`src/lib/google-auth.ts` decide a qué fila de `usuarios` corresponde la identidad. Es lógica pura, sin I/O, y se testea sola: el route hace las consultas y ejecuta lo que la regla decide.
+
+| Situación | Acción |
+|---|---|
+| Ya existe una fila con ese `google_sub` | `ENTRAR` |
+| Existe una fila con ese email, sin vincular | `VINCULAR` |
+| No existe nadie | `CREAR` — rol `PLAYER` por default |
+| `email_verified` en falso, o rol `ADMIN` | `RECHAZAR` |
+
+**El `sub` manda sobre el email.** Si alguien cambia su email en Google sigue siendo la misma persona y la misma cuenta.
+
+### Por qué vincular anula la contraseña anterior
+
+`POST /api/auth/register` **no verifica que el email sea tuyo**. Sin anular la contraseña, vincular por email sería un vector de apropiación de cuenta:
+
+1. El atacante registra `victima@gmail.com` con una contraseña propia.
+2. La víctima real entra con Google; el email coincide y vinculamos.
+3. El atacante conserva una contraseña válida de la cuenta que la víctima usa.
+
+Google **sí** prueba la propiedad del email (`email_verified`); nuestro registro no prueba nada. La identidad verificada gana: vinculamos, anulamos el `password_hash` anterior y avisamos por email.
+
+Cuando el registro verifique emails, esta anulación se puede suavizar.
+
+### El payload real de Google
+
+Verificado contra `auth.identities.identity_data` después de la primera corrida real. Estas son las diez claves que llegan:
+
+```
+avatar_url, email, email_verified, full_name, iss,
+name, phone_verified, picture, provider_id, sub
+```
+
+Dos cosas que importan y no son obvias:
+
+**No vienen `given_name` ni `family_name`.** El nombre sale de partir `full_name`. El route tiene una cadena de fallback (`given_name` → `metadata.given_name` → `full_name` → `metadata.name` → parte local del email) y es la que sostiene la feature: sin ella el usuario se llamaría por el prefijo de su email.
+
+**`identities[].id` es el `sub` de Google, no el uuid de la fila.** El uuid es `identities[].identity_id`, un campo distinto. Guardar el equivocado crea la cuenta igual, pero el login siguiente no la encuentra y crea otra. El `sub` real son 21 dígitos; un uuid son 36 caracteres.
+
+### Configuración
+
+Lo que hay que tener en su lugar, y dónde:
+
+| Dónde | Qué |
+|---|---|
+| Google Cloud Console → Authorized redirect URIs | `https://<ref>.supabase.co/auth/v1/callback` — el callback de **Supabase**, no el de la app |
+| Google Cloud Console → Test users | Si la consent screen está en *Testing*, hay que agregarse o Google bloquea |
+| Supabase → Sign In / Providers → Google | Habilitado, con el Client ID y el Secret que emite Google |
+| Supabase → URL Configuration → Redirect URLs | El origen desde el que se prueba, con puerto. El botón manda `redirectTo: ${window.location.origin}/auth/callback` |
+| `.env` | `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key moderna) |
+
+Los *Authorized JavaScript origins* de Google se dejan **vacíos**: en este flujo el browser nunca le habla a Google directamente.
+
+## Recuperación de contraseña
+
+Sin esto, un error de tipeo en el registro dejaba la cuenta muerta: no había segunda oportunidad.
+
+```
+/auth/recuperar  →  POST /api/auth/recuperar   →  mail con link (30 min)
+                        ↓
+/auth/restablecer?token=…  →  POST /api/auth/restablecer  →  contraseña nueva
+```
+
+### La clave del token es derivada, no `JWT_SECRET`
+
+Esto no es elegancia. `getAuthUser` (`src/lib/auth-api.ts`) verifica la cookie de sesión así:
+
+```ts
+const { payload } = await jwtVerify(token, secret);
+return payload as { sub: string; email: string; role: "OWNER" | "PLAYER" };
+```
+
+Verifica y **castea sin mirar la forma del payload**. Cualquier token que verifique ahí se convierte en una sesión autenticada. Si el token de recuperación compartiera la clave, **un link enviado por email sería un pase de sesión**.
+
+La clave sale de `JWT_SECRET` por derivación con separación de dominio:
+
+```ts
+sha256(JWT_SECRET + "|reset-password")
+```
+
+Hay dos tests que fijan la separación en los dos sentidos: un token de reset no verifica como sesión, y un token de sesión no se lee como reset.
+
+Se derivó en vez de usar una variable propia por una razón concreta: **no hay un secreto nuevo que configurar en local y en producción, así que no hay forma de que falte**. Si algún día hace falta rotarla por separado, se cambia la derivación por una variable.
+
+### De un solo uso, sin tabla
+
+El token lleva una huella del `password_hash` que la cuenta tenía al emitirlo:
+
+```ts
+huella = sha256("reset-password|" + (password_hash ?? "sin-password"))
+```
+
+Restablecer cambia el hash, la huella deja de coincidir y el mismo link no vuelve a funcionar. Tampoco funciona un link viejo si la persona cambió la contraseña por otro camino. Es un hash del hash, nunca el hash: el token viaja por email.
+
+Lo que **no** da: revocar un token antes de que se use. Mitigado con 30 minutos de vigencia. Si hiciera falta revocación explícita o auditoría de intentos, ahí sí haría falta una tabla.
+
+### La URL del link sale de configuración, nunca del request
+
+Derivar la base de `Host` o `x-forwarded-host` sería cómodo —funcionaría sola en los dos entornos— y es **host-header poisoning**, el ataque clásico contra recuperación de contraseña:
+
+> El atacante manda `Host: evil.com`. El mail le llega a la **víctima real**, pero con un link al dominio del atacante y un token válido adentro. Se lo cosecha en cuanto hace click.
+
+Por eso `urlBase()` lee `APP_URL` y nada más. En producción, si la variable falta, **rompe** antes que mandar un link a localhost: ese mail gastaría el único token que la persona pidió y el problema no se notaría hasta que alguien se queje.
+
+Hay un test que manda `evil.com` en los dos headers y exige que no aparezca en el html del mail.
+
+### Las respuestas no filtran nada
+
+`POST /api/auth/recuperar` responde **lo mismo exista o no la cuenta**, y el cuerpo se arma antes de mirar la base para que ninguna rama pueda devolver algo distinto. Un endpoint que contesta diferente es un oráculo de qué emails están registrados, y eso se recorre con una lista.
+
+`POST /api/auth/restablecer` comparte mensaje y status entre **todos** sus rechazos — token vencido, cuenta inexistente, cuenta ADMIN. Distinguirlos le confirmaría a quien prueba tokens cuáles eran legítimos. Hay un test que exige que los dos mensajes sean idénticos.
+
+### Dos decisiones más
+
+**No inicia sesión al restablecer**, a propósito: después de cambiar la contraseña se entra por la puerta normal, y así el link que llegó por mail no es también un pase.
+
+**No toca `google_sub`.** El link probó la propiedad del email —la misma prueba que da Google—, así que la cuenta se queda con las dos puertas abiertas. Es lo que evita el callejón sin salida de quien pierde acceso a su cuenta de Google.
+
+### Limitación conocida
+
+Cambiar la contraseña **no invalida las sesiones existentes**. Los JWT son stateless y no hay store de sesiones, así que no se puede revocar sin agregar uno.
+
+## El formulario
+
+El campo de contraseña tiene un botón para verla, en login y en registro. [NIST 800-63B](https://pages.nist.gov/800-63-3/sp800-63b.html) lo recomienda explícitamente, y no por comodidad: quien ve lo que escribe se equivoca menos y se anima a contraseñas más largas. Cambia el `type` del mismo nodo en vez de re-montar el input, así no se pierde el cursor ni lo que el gestor de contraseñas ya completó.
+
+El registro pide la contraseña dos veces. Es menos infalible de lo que parece —quien se equivoca igual en los dos campos pasa, y quien pegue el primero en el segundo no verifica nada— pero mientras el costo de un typo siga siendo alto, el cambio es barato. La confirmación **no viaja al servidor**: es una verificación del formulario, no una regla del dominio.
+
+Los tres campos tienen `autocomplete` (`current-password` en login, `new-password` en registro). Es lo que hace que el navegador ofrezca generar una clave fuerte y la guarde — la respuesta de fondo a «¿sé cuál es mi contraseña?» no es escribirla dos veces, es no tener que recordarla.
+
+## Rutas públicas
+
+Todo el flujo de entrada vive en `PUBLIC_PATHS` de `src/proxy.ts`, porque recuperar la cuenta o iniciar sesión es precisamente lo que hace quien **no puede entrar**:
+
+```
+/auth/login        /api/auth/login        /api/auth/logout
+/auth/register     /api/auth/register     /api/auth/refresh
+/auth/callback     /api/auth/google
+/auth/recuperar    /api/auth/recuperar
+/auth/restablecer  /api/auth/restablecer
+```
+
+Sin esto, el flujo entero queda detrás del muro que viene a saltar.
