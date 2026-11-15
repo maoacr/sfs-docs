@@ -162,3 +162,39 @@ vercel api "/v9/projects/<projectId>?teamId=<teamId>" \
   | sed -n '/^{/,$p' | jq '.crons'
 # enabledAt seteado, disabledAt null, definitions con path y schedule
 ```
+
+## Puertas de calidad (CI)
+
+`.github/workflows/ci.yml` corre en cada PR y en cada push a `main`:
+
+```
+typecheck  →  tsc --noEmit  +  @sfs/db
+tests      →  vitest run
+lint       →  solo los archivos que toca el PR
+```
+
+Las tres corren **sin secretos**: vitest no carga `.env` a `process.env`, así que la suite pasa con todas las variables sin definir. Un test que necesita credenciales reales no es un test.
+
+### El lint es un ratchet, a propósito
+
+Corre solo sobre los archivos del PR (`git diff --diff-filter=ACMR origin/$BASE_REF...HEAD`). El repo arrastra errores heredados en componentes sin tests, y bloquear todo dejaría el CI rojo de entrada — un CI rojo permanente se ignora hasta volverse decorativo. Así el código nuevo nace limpio y los heredados se arreglan al pasar por ellos.
+
+### Dos trampas de GitHub Actions
+
+Los workflows de un evento `pull_request` se toman del **merge de head en base**. Un PR cuya base sea una rama que no tenga `ci.yml` **no corre el gate**, solo los checks de Vercel.
+
+Y cambiarle la base a un PR emite el evento `edited`, que no está en los tipos por defecto de `pull_request`. Por eso el trigger los lista explícitamente:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+```
+
+Sin eso, un PR re-apuntado se puede mergear sin pasar nunca por la puerta.
+
+### Variables de entorno: aplican a deployments nuevos
+
+Cambiar una variable en Vercel **no afecta al deployment que está corriendo**. Hay que redeployar. Es la falla más silenciosa del proyecto: cambiar `APP_URL` sin redeployar deja los links de recuperación apuntando al dominio viejo, y cada mail gasta el único token que la persona pidió.
+
+`APP_URL` se lee en `src/lib/mercadopago.ts` (las `back_urls`) y en el route de recuperación. Las dos son del lado del servidor: por eso **no** lleva el prefijo `NEXT_PUBLIC_`, que haría que Next la inlinee en el bundle del browser sin que nadie la use ahí.

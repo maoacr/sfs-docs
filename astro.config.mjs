@@ -47,6 +47,7 @@ export default defineConfig({
 					label: 'Guías',
 					items: [
 						{ label: 'Despliegue', slug: 'guides/despliegue' },
+						{ label: 'Mudanza de dominio', slug: 'guides/dominio' },
 						{ label: 'Autenticación', slug: 'guides/auth' },
 						{ label: 'Seguridad', slug: 'guides/security' },
 						{ label: 'MercadoPago', slug: 'guides/mercadopago' },

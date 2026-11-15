@@ -23,6 +23,11 @@ Cada request a la API pasa por las siguientes capas en orden:
 |----------|--------|---------|
 | `POST /api/auth/login` | 5 | 1 minuto |
 | `POST /api/auth/register` | 3 | 1 minuto |
+| `POST /api/auth/google` | 5 | 1 minuto |
+| `POST /api/auth/recuperar` | 3 | 15 minutos |
+| `POST /api/auth/restablecer` | 3 | 15 minutos |
+
+`login` y `google` comparten el balde `auth`: los dos son intentos de autenticarse, así que cinco por contraseña más cinco por Google serían diez. `recuperar` y `restablecer` comparten `auth_recuperar`. Ver [Seguridad](/guides/security/).
 | `POST /api/reservas` | 10 | 1 minuto |
 | `GET /api/disponibilidad` | 60 | 1 minuto |
 | Resto de endpoints | 100 | 1 minuto |
@@ -33,7 +38,7 @@ Headers de respuesta: `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
 
 Los métodos `POST`, `PUT`, `PATCH`, `DELETE` de las rutas con `apiHandler` requieren header `X-CSRF-Token` que coincida con la cookie `csrf_token`. La cookie se emite en login/registro y `GET /api/auth/me` la renueva. En el frontend, `apiFetch` (`src/lib/api-client.ts`) envía el header automáticamente.
 
-Excepciones: `POST /api/auth/login` y `POST /api/auth/register` no requieren CSRF (no hay sesión aún).
+Excepciones: `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/google`, `POST /api/auth/recuperar` y `POST /api/auth/restablecer` no requieren CSRF. Quien los llama todavía no tiene sesión y por lo tanto tampoco cookie de CSRF.
 
 ### Tenant isolation
 
@@ -46,6 +51,9 @@ Cada query a modelos multi-tenant (Complejo, Cancha, Reserva y sus recursos hijo
 | `POST` | `/api/auth/login` | ❌ | 5/min | Login — devuelve JWT en cookie `sfs_token` |
 | `POST` | `/api/auth/register` | ❌ | 3/min | Registro — crea usuario y devuelve JWT |
 | `POST` | `/api/auth/logout` | ❌ | default | Cierra sesión — borra cookies |
+| `POST` | `/api/auth/google` | ❌ | 5/min | Canjea el access token de Supabase por sesión de SFS. Solo acepta `accessToken` |
+| `POST` | `/api/auth/recuperar` | ❌ | 3/15min | Manda el link de recuperación. Responde igual exista o no la cuenta |
+| `POST` | `/api/auth/restablecer` | ❌ | 3/15min | Canjea el token del link por una contraseña nueva. No inicia sesión |
 
 ### Login
 
