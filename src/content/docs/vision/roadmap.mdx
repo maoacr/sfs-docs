@@ -69,7 +69,7 @@ Implementa la lógica de pricing, pagos con MercadoPago Checkout Pro, TTL real, 
 
 ## Estabilización: Migración a Drizzle + flujo de pagos
 
-**Estado**: 🟡 En rama `feat/drizzle-migration` — 2026-09-24
+**Estado**: 🟢 Completada — 2026-11-17
 
 La Fase 1 quedó marcada como completa, pero el flujo de pago real no funcionaba. Esta estabilización cierra la migración de Prisma a Drizzle y corrige las causas raíz.
 
@@ -85,20 +85,24 @@ La Fase 1 quedó marcada como completa, pero el flujo de pago real no funcionaba
 | **E.7b** | Zona horaria por complejo: turnos, precios, filtros por día, emails y UI en la hora de la cancha | ✅ |
 | **E.7c** | CSRF desde el cliente (`apiFetch`) y todas las rutas con sesión en `apiHandler` | ✅ |
 | **E.7d** | Storage: bucket público `canchas` y privado `sfs`, versionados en la migración `0003` ([guía](/guides/storage)) | ✅ |
-| **E.8** | Probar pago real en sandbox con buyer test user | 🔴 |
+| **E.8** | Probar pago real en sandbox con buyer test user | ✅ |
 | **E.9** | Merge a `main` y deploy en Vercel ([guía](/guides/despliegue)) | ✅ |
 | **E.10** | RLS deny-by-default en las 15 tablas de `public` (migración `0004`) | ✅ |
 | **E.11** | Keepalive de Supabase en GitHub Actions — evita la pausa por inactividad | ✅ |
 | **E.12** | Expiración del TTL en la consulta: el turno se libera sin depender del cron | ✅ |
 | **E.13** | `SameSite=lax` en las cookies de sesión — con `strict`, la vuelta de MercadoPago caía en `/auth/login` | ✅ |
 | **E.14** | Lectura y escritura comparten la regla de ocupación del turno (evita grilla libre + `409`) | ✅ |
+| **E.15** | `MP_WEBHOOK_SECRET` admite varias claves: MP emite una por modo y firma con la del modo que originó el pago | ✅ |
+| **E.16** | `auto_return` en la preference — sin eso MP no dispara las `back_urls` y deja al jugador en el comprobante | ✅ |
+| **E.17** | `PAGO_PARCIAL` y `EXPIRADA` visibles en «Mis reservas», con el saldo y el botón para pagarlo | ✅ |
 
 **Verificación**:
-- `pnpm test` → 81/81 pasan
+- `pnpm test` → 212/212 pasan
 - `tsc --noEmit` → 0 errores
 - Webhook con dos notificaciones concurrentes del mismo pago → se aplica una sola vez
 - Reserva 19:00 en Bogotá → `slot_inicio` 00:00 UTC del día siguiente, listada en su día local
 - Foto subida a `canchas` → servida pública como WebP; al borrarla desaparece de la base y del bucket
+- **Pago end to end en sandbox (2026-11-17)**: pago `190172054268` aprobado con buyer test user; el webhook lo aplicó 65 s después de crearse el registro; la reserva quedó en `PAGO_PARCIAL` con $80.000 pagados sobre $160.000 y el turno ocupado
 
 ---
 
