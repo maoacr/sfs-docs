@@ -32,6 +32,10 @@ APP_URL="https://..."           # URL pública: MP la usa para back_urls y notif
 | `MP_WEBHOOK_SECRET` | **Claves secretas que genera MercadoPago** en Tu aplicación → Webhooks. Admite **varias separadas por coma**: vale la firma que coincida con cualquiera. Si ponés un valor inventado, ninguna firma coincide y todas las notificaciones responden 401 |
 | `APP_URL` | Base de `notification_url` y `back_urls`. MP no puede notificar a `localhost` |
 
+:::caution[`back_urls` sin `auto_return` no redirige]
+Definir las `back_urls` no alcanza: MP sólo las dispara si la preference manda `auto_return: "approved"`. Sin eso el jugador se queda en el comprobante de MP, con un botón "Volver al sitio" que muchos no tocan — el pago entra igual por el webhook, pero la persona cree que falló.
+:::
+
 ## Sandbox (desarrollo)
 
 ### 1. Obtener credenciales de prueba
@@ -48,6 +52,17 @@ Panel MP → Tu aplicación → **Cuentas de prueba**. Necesitás crear **dos** 
 |---|---|
 | **Vendedor (Seller)** | Genera las credenciales. El User ID del seller debe coincidir con el sufijo del Access Token |
 | **Comprador (Buyer)** | Es el que usás para pagar en el checkout de MP |
+
+El panel muestra la contraseña al crear el usuario y después ya no. Si la perdiste, creá otro comprador por API — la respuesta la trae:
+
+```bash
+curl -s -X POST https://api.mercadopago.com/users/test \
+  -H "Authorization: Bearer $MP_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"site_id":"MCO","description":"comprador de prueba"}' | jq
+```
+
+`MCO` es Colombia, y coincide con el `currency_id: "COP"` de la preference. Devuelve `id`, `nickname`, `email` y `password`.
 
 ### 3. Tarjetas de prueba
 
@@ -175,6 +190,7 @@ Si no hay `MP_WEBHOOK_SECRET` configurado —o la lista queda vacía tras descar
    └── Retorna checkoutUrl
 
 3. Player paga en checkout de MP
+   └── `auto_return: "approved"` lo devuelve solo a `back_urls.success`
 
 4. MP envía webhook a /api/webhooks/mercadopago
    └── Verifica firma + consulta el pago a la API de MP
