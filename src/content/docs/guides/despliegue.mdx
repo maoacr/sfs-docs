@@ -27,7 +27,7 @@ El runtime necesita estas. Todas van en el entorno **Production** del proyecto.
 | `SUPABASE_SERVICE_ROLE_KEY` | Clave de servicio (Storage) | `src/lib/supabase.ts` |
 | `MP_ACCESS_TOKEN` | SDK de MercadoPago | `src/lib/mercadopago.ts` |
 | `MP_WEBHOOK_SECRET` | Verificación de firma del webhook | `src/lib/mercadopago.ts` |
-| `NEXT_PUBLIC_APP_URL` | `back_urls` y `notification_url` de MP | `src/lib/mercadopago.ts` |
+| `APP_URL` | `back_urls` y `notification_url` de MP | `src/lib/mercadopago.ts` |
 | `RESEND_API_KEY` | Emails transaccionales | `src/lib/email.ts` |
 | `CRON_SECRET` | Autoriza el job de expiración | `src/app/api/cron/liberar-expiradas/route.ts` |
 
@@ -115,12 +115,12 @@ Los **Vercel Cron no pasan por Cloudflare**: Vercel invoca la función contra la
 Son unos 30 minutos, y es casi todo configuración:
 
 1. `CNAME` en Cloudflare → el dominio en Vercel → esperar el certificado
-2. `NEXT_PUBLIC_APP_URL` = nuevo dominio
-3. Redeploy (la variable se hornea en el build)
+2. `APP_URL` = nuevo dominio
+3. Redeploy (las variables de Vercel sólo aplican a deployments nuevos)
 4. Actualizar la URL del webhook en el panel de MercadoPago
 5. Opcional: verificar el dominio nuevo en Resend y setear `EMAIL_FROM`
 
-Sale barato porque **el dominio vive sólo en configuración**: `NEXT_PUBLIC_APP_URL` se usa en un único archivo y las columnas `url` de la base apuntan a Supabase Storage, no a la app. Si se guardaran URLs absolutas en filas, esto sería un `UPDATE` masivo sobre datos de producción.
+Sale barato porque **el dominio vive sólo en configuración**: `APP_URL` se lee en dos lugares del servidor y las columnas `url` de la base apuntan a Supabase Storage, no a la app. Si se guardaran URLs absolutas en filas, esto sería un `UPDATE` masivo sobre datos de producción.
 
 Dos efectos a tener en cuenta:
 
