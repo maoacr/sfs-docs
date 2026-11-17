@@ -21,7 +21,7 @@ El reparto 85% dueño / 15% plataforma **todavía no está implementado**. Hoy e
 # .env
 MP_ACCESS_TOKEN="TEST-xxx"      # Access token de la aplicación
 MP_PUBLIC_KEY="TEST-xxx"        # Public key de la aplicación
-MP_WEBHOOK_SECRET="xxx"         # Clave secreta de webhooks — la genera MP, no vos
+MP_WEBHOOK_SECRET="xxx,yyy"     # Claves de webhooks — las genera MP. Varias, separadas por coma
 APP_URL="https://..."           # URL pública: MP la usa para back_urls y notificaciones
 ```
 
@@ -29,7 +29,7 @@ APP_URL="https://..."           # URL pública: MP la usa para back_urls y notif
 |---|---|
 | `MP_ACCESS_TOKEN` | Token de acceso del servidor. Con prefijo `TEST-` el checkout usa `sandbox_init_point`; con `APP_USR-`, `init_point` |
 | `MP_PUBLIC_KEY` | Llave pública para el frontend. Mismo prefijo que el access token |
-| `MP_WEBHOOK_SECRET` | **Clave secreta que genera MercadoPago** en Tu aplicación → Webhooks. Si ponés un valor inventado, ninguna firma coincide y todas las notificaciones responden 401 |
+| `MP_WEBHOOK_SECRET` | **Claves secretas que genera MercadoPago** en Tu aplicación → Webhooks. Admite **varias separadas por coma**: vale la firma que coincida con cualquiera. Si ponés un valor inventado, ninguna firma coincide y todas las notificaciones responden 401 |
 | `APP_URL` | Base de `notification_url` y `back_urls`. MP no puede notificar a `localhost` |
 
 ## Sandbox (desarrollo)
@@ -86,13 +86,43 @@ Si intentás pagar con tu cuenta real de MP en modo sandbox, MP rechaza la trans
 
 ### Configuración
 
-En el panel de MP → Tu aplicación → **Webhooks**:
+En el panel de MP → Tu aplicación → **Webhooks**. Hay **dos pestañas**, `Modo de prueba` y `Modo productivo`, y son configuraciones independientes: cada una con su URL y **su propia clave secreta**.
 
 | Campo | Valor |
 |---|---|
-| URL | `https://tu-dominio.com/api/webhooks/mercadopago` |
-| Eventos | **Pagos** (`payment`) |
-| Clave secreta | La genera MP — copiala a `MP_WEBHOOK_SECRET` |
+| URL | `https://tu-dominio.com/api/webhooks/mercadopago` (la misma en las dos pestañas) |
+| Eventos | **`Pagos (legacy)`** |
+| Clave secreta | La genera MP — copiá **las dos**, separadas por coma, a `MP_WEBHOOK_SECRET` |
+
+:::caution[Marcá `Pagos (legacy)`, no `Order`]
+El handler filtra con `if (tipo !== "payment")`. `Pagos (legacy)` es el topic que manda `type: "payment"`; `Order (Mercado Pago)` es la API nueva de Orders y manda otro type, así que el webhook lo descarta con un `200 OK`. Verde en el panel de MP, cero pagos aplicados.
+
+La etiqueta "legacy" invita a esquivarlo y es justo el que hace falta.
+:::
+
+:::danger[El botón de refresh no muestra la clave: la regenera]
+Tocarlo invalida la clave que ya tenés guardada en Vercel y te deja todo en `401`. Un clic de curiosidad cuesta un redeploy.
+:::
+
+### Por qué dos claves en una sola variable
+
+MP firma cada notificación con la clave **del modo que originó el pago**, y el endpoint es uno solo. El problema es saber qué modo es:
+
+- Pagando con **vendedor de prueba**, las notificaciones llegan como **modo productivo** — aunque estés probando. Sus credenciales arrancan con `APP_USR-` igual que las de una cuenta real.
+- La doc de MP sugiere que los pagos de prueba van al modo de prueba. En la práctica no siempre.
+
+Con una sola clave guardada, acertar el modo es una apuesta, y perderla se ve como `401` en todos los reintentos con el log del handler vacío — idéntico a una firma mal implementada. Por eso `verifyWebhookRequest` acepta una lista: guardás las dos y valida venga del modo que venga.
+
+:::note[`APP_USR-` no significa plata real]
+Un vendedor de prueba tiene su propia aplicación y sus credenciales productivas también arrancan con `APP_USR-`. Desde la variable de entorno es indistinguible de una cuenta real. Para saber de quién es el token:
+
+```bash
+curl -s -H "Authorization: Bearer $MP_ACCESS_TOKEN" \
+  https://api.mercadopago.com/users/me | jq '{id, nickname, email}'
+```
+
+`nickname` tipo `TESTUSER…` → vendedor de prueba. Tu nickname real → el checkout cobra de verdad.
+:::
 
 `/api/webhooks/` es una ruta pública en `src/proxy.ts`: MP llama sin cookie de sesión, así que la autenticación es la firma. Si la ruta no fuera pública, el proxy redirigiría a `/auth/login` y el handler nunca se ejecutaría.
 
@@ -121,10 +151,10 @@ Cada webhook incluye los headers `x-signature` (`ts=...,v1=...`) y `x-request-id
 2. Construye el manifest: `id:{data.id};request-id:{x-request-id};ts:{ts};`
    - `data.id` se toma del query param y va en minúsculas si es alfanumérico
    - Las partes que MP no envía se omiten
-3. Calcula HMAC-SHA256 del manifest con `MP_WEBHOOK_SECRET`
-4. Compara con `v1` usando `crypto.timingSafeEqual`
+3. Calcula HMAC-SHA256 del manifest con cada clave de `MP_WEBHOOK_SECRET`
+4. Compara con `v1` usando `crypto.timingSafeEqual`; alcanza con que **una** coincida
 
-Si no hay `MP_WEBHOOK_SECRET` configurado, los webhooks se aceptan sin verificar (solo para desarrollo local).
+Si no hay `MP_WEBHOOK_SECRET` configurado —o la lista queda vacía tras descartar entradas en blanco—, los webhooks se aceptan sin verificar (solo para desarrollo local).
 
 ### Doble verificación e idempotencia
 
