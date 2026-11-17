@@ -22,7 +22,7 @@ El reparto 85% dueño / 15% plataforma **todavía no está implementado**. Hoy e
 MP_ACCESS_TOKEN="TEST-xxx"      # Access token de la aplicación
 MP_PUBLIC_KEY="TEST-xxx"        # Public key de la aplicación
 MP_WEBHOOK_SECRET="xxx"         # Clave secreta de webhooks — la genera MP, no vos
-NEXT_PUBLIC_APP_URL="https://..." # URL pública: MP la usa para back_urls y notificaciones
+APP_URL="https://..."           # URL pública: MP la usa para back_urls y notificaciones
 ```
 
 | Variable | Descripción |
@@ -30,7 +30,7 @@ NEXT_PUBLIC_APP_URL="https://..." # URL pública: MP la usa para back_urls y not
 | `MP_ACCESS_TOKEN` | Token de acceso del servidor. Con prefijo `TEST-` el checkout usa `sandbox_init_point`; con `APP_USR-`, `init_point` |
 | `MP_PUBLIC_KEY` | Llave pública para el frontend. Mismo prefijo que el access token |
 | `MP_WEBHOOK_SECRET` | **Clave secreta que genera MercadoPago** en Tu aplicación → Webhooks. Si ponés un valor inventado, ninguna firma coincide y todas las notificaciones responden 401 |
-| `NEXT_PUBLIC_APP_URL` | Base de `notification_url` y `back_urls`. MP no puede notificar a `localhost` |
+| `APP_URL` | Base de `notification_url` y `back_urls`. MP no puede notificar a `localhost` |
 
 ## Sandbox (desarrollo)
 
@@ -64,7 +64,7 @@ Usá estas tarjetas en el checkout de MP (después de loguearte con el buyer):
 MP no puede llamar a `localhost`. Hay dos caminos:
 
 - **Contra el deployment** (recomendado): ya existe una URL pública de producción. Apuntá el webhook del panel ahí y probá con credenciales `TEST-`. No hace falta túnel.
-- **Contra tu máquina**: exponé el dev server con un túnel (`cloudflared`, `ngrok`) y usá esa URL pública como `NEXT_PUBLIC_APP_URL` y como URL del webhook.
+- **Contra tu máquina**: exponé el dev server con un túnel (`cloudflared`, `ngrok`) y usá esa URL pública como `APP_URL` y como URL del webhook.
 
 Ver [Despliegue](/guides/despliegue) para la URL y la verificación de que el endpoint es alcanzable.
 
@@ -180,11 +180,13 @@ Para pasar a producción:
 
 1. Cambiá las credenciales a las de **producción** (prefijo `APP_USR-`)
 2. Configurá la URL del webhook con tu dominio real y copiá la clave secreta que genera MP
-3. Asegurate de que `NEXT_PUBLIC_APP_URL` apunte al dominio de producción
+3. Asegurate de que `APP_URL` apunte al dominio de producción
 4. Los test users y tarjetas de prueba **no funcionan en producción**
 
-:::note[`NEXT_PUBLIC_APP_URL` se hornea en el build]
-Tiene prefijo `NEXT_PUBLIC_`, así que su valor queda fijado al compilar. Cambiarla exige **redeploy**, no basta con editarla. Y las preferencias de pago ya creadas conservan las `back_urls` viejas: ver [migrar a un dominio propio](/guides/despliegue#migrar-a-un-dominio-propio).
+:::note[`APP_URL` exige redeploy, aunque no se hornee en el build]
+Se lee del lado del servidor, así que **no** lleva el prefijo `NEXT_PUBLIC_` y no queda inlineada en el bundle del browser. Pero las variables de Vercel aplican a **deployments nuevos**: cambiar el valor no afecta al que está corriendo. Hay que redeployar.
+
+Y las preferencias de pago ya creadas conservan las `back_urls` viejas: ver [migrar a un dominio propio](/guides/despliegue#migrar-a-un-dominio-propio).
 :::
 
 ### La vuelta del checkout y las cookies
