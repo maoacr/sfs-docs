@@ -1,0 +1,136 @@
+---
+title: Cobros y saldos
+description: Cómo entra la plata en SFS — quién puede cobrar, cuándo, y qué pasa con una reserva que quedó debiendo.
+---
+
+El dinero entra por dos caminos —la app y el mostrador— y los dos terminan en
+la misma tabla. Esta guía explica las reglas que los gobiernan.
+
+## La invariante
+
+**Toda plata que entra deja una fila en `pagos`. Si no hay fila, no entró.**
+
+Suena obvio y no lo era: hasta noviembre de 2026, cuando el dueño agendaba una
+reserva, el sistema la marcaba como pagada y **no registraba nada**. Para un
+cierre de caja eso no es un dato incompleto, es un dato inexistente: el dueño
+cobraba diez partidos en efectivo y el reporte mostraba cero.
+
+## Deber bloquea
+
+Un jugador con saldo pendiente **no puede reservar en ninguna cancha de ningún
+complejo** hasta saldar. No es por complejo ni por cancha: deber en el A deja
+afuera del B.
+
+La regla vive en `src/lib/saldo.ts` y se aplica en `POST /api/reservas`.
+
+:::caution[También cuando agenda el dueño]
+El bloqueo se mide contra el **titular** de la reserva, no contra quien manda
+la request. Si no, el dueño agendando a nombre de un deudor sería un agujero y
+la deuda se volvería opcional: alcanzaría con pedirle al dueño que la cargue.
+
+Al jugador se le dice que tiene saldo; al dueño, que le cobre a esa persona
+antes de agendarle.
+:::
+
+Se sale del bloqueo por dos puertas:
+
+| Puerta | Endpoint |
+|---|---|
+| El jugador paga por la app | `POST /reservas/:id/pagar-saldo` |
+| El dueño registra lo que cobró | `POST /reservas/:id/confirmar-pago` |
+
+### Cuánto tiempo tiene el dueño para registrar un cobro en efectivo
+
+**Ninguno, y es deliberado.** Un vencimiento sólo puede terminar en dos
+lugares y los dos son malos: si perdona la deuda, le enseña al jugador que
+jugando y esperando se zafa; si la da por cobrada, inventa plata que nunca
+entró y rompe la contabilidad.
+
+La deuda es del jugador, no del dueño. La presión ya está donde corresponde:
+el bloqueo recae sobre quien debe.
+
+## «Se jugó» y «se pagó» son ejes distintos
+
+Esta es la decisión que más cuesta reconstruir si se pierde, así que queda
+escrita.
+
+`estadoReservaEnum` mezcla en una sola columna dos preguntas independientes:
+
+| Eje | Valores conceptuales |
+|---|---|
+| ¿Se jugó? | próxima · jugada · cancelada |
+| ¿Se pagó? | nada · parcial · total |
+
+Un partido puede estar **jugado Y debiendo** — es exactamente el caso del
+efectivo que se cobra al día siguiente. Tratar `COMPLETADA` como sinónimo de
+`CONFIRMADA` borra esa diferencia.
+
+:::danger[El callejón que esto provocaba]
+`confirmar-pago` rechazaba toda reserva `CONFIRMADA` o `COMPLETADA`, y el botón
+de «Marcar jugada» no mira el saldo. Marcar un partido como jugado dejaba la
+deuda **imposible de registrar por ningún camino**, y como el saldo bloquea
+reservar, ese jugador quedaba **bloqueado para siempre sin forma de saldar**.
+
+Corregido: lo que habilita el cobro es **que haya saldo**. Sólo se rechaza lo
+muerto —canceladas y expiradas—. Y cobrar no «des-juega» un partido: si estaba
+`COMPLETADA`, sigue `COMPLETADA`.
+:::
+
+No hizo falta partir el enum. **El eje del pago ya existe** y vive en
+`montoPagado` y `saldoPendiente`; alcanzaba con preguntarle a esos números en
+vez de al estado.
+
+## Pagar después de que pasó la fecha
+
+Se puede, y debe seguir pudiéndose. La deuda no caduca porque el partido se
+jugó, y prohibirlo crearía deuda impagable con el jugador bloqueado de por
+vida.
+
+## El mostrador
+
+El dueño cobra desde **Cobros** (`/owner/cobros`) o desde el panel del día.
+
+La pantalla de cuentas por cobrar filtra **por saldo, no por estado**: se puede
+deber estando `PENDIENTE_PAGO`, `PAGO_PARCIAL` o `COMPLETADA`. El endpoint es
+`GET /api/reservas?conSaldo=true`.
+
+### Métodos
+
+El formulario del mostrador ofrece cinco opciones, no las siete del enum:
+
+```
+Efectivo · Transferencia o billetera · Tarjeta débito · Tarjeta crédito · Otro
+```
+
+`PSE` y `BILLETERA` existen en la base porque **MercadoPago los reporta** y ahí
+la distinción sirve para los reportes. Pero nadie te paga «por PSE» en una
+cancha: te transfiere, y el carril lo elige la persona en su banco. Ofrecerlos
+al lado de Transferencia es pedirle al dueño que clasifique algo que desde su
+lado es un solo hecho.
+
+Nequi, Daviplata y Bancolombia son los tres `TRANSFERENCIA` y se distinguen por
+`entidad`. El efectivo es el único que no la pide: no hay institución detrás.
+
+Ver [las tres dimensiones del pago](/guides/mercadopago/#las-tres-dimensiones-del-pago).
+
+## Clientes e invitados
+
+Al agendar manualmente, el campo **Cliente** busca entre los clientes del dueño
+y vincula la reserva a la cuenta real: la persona la ve en su app, la puede
+pagar y le cuenta para el saldo.
+
+:::note[Por qué el buscador no ve a todos los usuarios]
+`GET /api/clientes?q=` hace `JOIN` contra las reservas del propio dueño. Buscar
+sobre el padrón completo convertiría el endpoint en un **enumerador de nombres
+y teléfonos**: cualquier dueño podría tipear dos letras y cosechar datos de
+gente que nunca pisó su cancha.
+
+La contracara es que un cliente nuevo no aparece — y para eso existe el camino
+del invitado.
+:::
+
+Si la persona no está registrada **no se bloquea nada**: sería inventarle
+fricción al mostrador. El nombre queda en `reservas.invitado_nombre`. Sin esa
+columna la información se perdía, porque `player_id` es `NOT NULL` y termina
+apuntando a la cuenta del propio dueño. El día que esa persona se registre, hay
+un hilo del que tirar.
