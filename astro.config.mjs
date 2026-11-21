@@ -51,6 +51,7 @@ export default defineConfig({
 						{ label: 'Autenticación', slug: 'guides/auth' },
 						{ label: 'Seguridad', slug: 'guides/security' },
 						{ label: 'MercadoPago', slug: 'guides/mercadopago' },
+						{ label: 'Cobros y saldos', slug: 'guides/cobros' },
 						{ label: 'Email (Resend)', slug: 'guides/email' },
 						{ label: 'Zonas Horarias', slug: 'guides/timezone' },
 						{ label: 'Storage', slug: 'guides/storage' },

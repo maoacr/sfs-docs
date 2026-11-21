@@ -178,6 +178,89 @@ Si no hay `MP_WEBHOOK_SECRET` configurado —o la lista queda vacía tras descar
 - MP envía varias notificaciones por pago (`created`, `updated`) y reintenta ante errores. El procesamiento corre en una transacción con `SELECT … FOR UPDATE` y un pago ya `APROBADO` nunca se vuelve a sumar a la reserva.
 - Ante un error inesperado el webhook responde `500` para que MP reintente; los reintentos son seguros.
 
+## Las tres dimensiones del pago
+
+Cada fila de `pagos` responde tres preguntas distintas, en columnas distintas:
+
+| Columna | Pregunta | Tipo |
+|---|---|---|
+| `canal` | ¿dónde se originó? | enum: `APP`, `PRESENCIAL` |
+| `metodo` | ¿cómo se movió la plata? | enum: `EFECTIVO`, `TRANSFERENCIA`, `PSE`, `TARJETA_DEBITO`, `TARJETA_CREDITO`, `BILLETERA`, `OTRO` |
+| `entidad` | ¿quién? | **varchar**: Nequi, Daviplata, Bancolombia, Visa… |
+
+Son tres y no una porque cuando alguien paga en la app con PSE de Bancolombia
+vía MercadoPago, **las tres cosas son ciertas a la vez**. Una sola columna
+obliga a elegir una y perder las otras dos.
+
+`entidad` es varchar y no enum a propósito: los tipos de método son pocos y
+estables, pero la lista de bancos y billeteras es abierta y MercadoPago
+devuelve el emisor con el nombre que se le antoja. Un enum pediría una
+migración por cada banco nuevo.
+
+Quién procesó el pago no necesita columna: `mp_payment_id IS NOT NULL` ya lo
+responde. Un cierre diario es un `GROUP BY canal, metodo`, con índice.
+
+### La comisión
+
+`comision` guarda lo que se quedó el procesador. Sin esa columna **los libros
+nunca cuadran contra el extracto bancario**: lo facturado no es lo que llega.
+Medición real de noviembre de 2026: $4.088 sobre $80.000, un **5,11%**.
+
+El neto no se guarda porque es `monto - comision`.
+
+## Estados de un pago
+
+`estadoPagoEnum`: `PENDIENTE`, `APROBADO`, `RECHAZADO`, `REEMBOLSADO`, `EXPIRADO`.
+
+`RECHAZADO` es «el banco dijo que no». **`EXPIRADO` es «la persona se fue sin
+pagar»**. Mezclarlos arruinaría el reporte de ventas perdidas: uno es un
+problema de medio de pago y el otro de conversión.
+
+### `detalle_estado`
+
+Guarda el `status_detail` crudo de MercadoPago —`cc_rejected_insufficient_amount`,
+`pending_review_manual`, `accredited`—. Se guarda **el código y no el mensaje**:
+el código es el hecho estable y consultable *(«¿cuántas ventas perdí por fondos
+insuficientes?»)* mientras que el texto es presentación.
+
+`src/lib/resultado-pago.ts` lo traduce a una línea mostrable y a un
+`reintentable`. Ese booleano no es decorativo: ante
+`cc_rejected_duplicated_payment` volver a ofrecer el botón de pagar es invitar
+a pagar dos veces.
+
+:::note[El mapa es incompleto a propósito]
+MercadoPago agrega códigos cuando quiere. Lo desconocido cae en el mensaje
+genérico de su `status`, así que un código nuevo **degrada la precisión pero
+nunca rompe ni miente**. Hay un test que lo fija.
+
+Dos decisiones del mapa que conviene no revertir sin pensarlas: a quien cae en
+un filtro de riesgo **no se le dice** que cayó en un filtro de riesgo —no puede
+hacer nada con eso salvo asustarse—, y el duplicado es el único caso donde
+reintentar es *peligroso* en vez de inútil.
+:::
+
+### Expiración de intentos abandonados
+
+Cada clic en «pagar» crea una fila en `pagos` **antes** de ir a MercadoPago,
+porque su id viaja como `external_reference`. Si la persona no completa el
+checkout, esa fila queda `PENDIENTE` para siempre.
+
+`expirarPagosAbandonados` las cierra a los 15 minutos. El resguardo que lo hace
+seguro es **`mp_payment_id IS NULL`**: un pago que MP ya reconoció puede estar
+legítimamente demorado —`pending_review_manual` tarda hasta dos días hábiles— y
+expirarlo sería darlo por muerto justo antes de que MP lo apruebe.
+
+:::caution[Los dos vocabularios de MercadoPago]
+La API de pagos dice `approved`/`rejected`. La query de las `back_urls` dice
+`success`/`failure`. Es el mismo hecho con dos nombres, y mezclarlos manda todo
+al mensaje genérico.
+
+Además, volver del checkout sin pagar manda `status=null`. Ante un status que
+no se entiende **no se muestra ningún aviso**: avisar «no pudimos confirmar el
+pago» por un no-evento asusta sin motivo, y la tarjeta de la reserva ya cuenta
+la verdad sacándola de la base.
+:::
+
 ## Flujo de pago completo
 
 ```

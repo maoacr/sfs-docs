@@ -95,14 +95,23 @@ La Fase 1 quedó marcada como completa, pero el flujo de pago real no funcionaba
 | **E.15** | `MP_WEBHOOK_SECRET` admite varias claves: MP emite una por modo y firma con la del modo que originó el pago | ✅ |
 | **E.16** | `auto_return` en la preference — sin eso MP no dispara las `back_urls` y deja al jugador en el comprobante | ✅ |
 | **E.17** | `PAGO_PARCIAL` y `EXPIRADA` visibles en «Mis reservas», con el saldo y el botón para pagarlo | ✅ |
+| **E.18** | Estados de tarjeta: cada `status_detail` traducido a un mensaje accionable, con `reintentable` ([detalle](/guides/mercadopago/#estados-de-un-pago)) | ✅ |
+| **E.19** | `EXPIRADO` y expiración de intentos abandonados a los 15 min, sin tocar los que MP ya reconoció | ✅ |
+| **E.20** | `auto_return` sólo con URL pública — con `localhost` MP rechazaba la preference entera | ✅ |
+| **E.21** | El saldo pendiente bloquea reservar, también cuando agenda el dueño ([regla](/guides/cobros/#deber-bloquea)) | ✅ |
+| **E.22** | Cobro en mostrador y cuentas por cobrar para el dueño ([guía](/guides/cobros)) | ✅ |
+| **E.23** | «Se jugó» y «se pagó» como ejes distintos: marcar COMPLETADA ya no traba el cobro | ✅ |
+| **E.24** | Reserva manual vinculada a la cuenta del cliente; invitado no registrado anotado sin bloquear | ✅ |
 
 **Verificación**:
-- `pnpm test` → 212/212 pasan
+- `pnpm test` → 342/342 pasan
 - `tsc --noEmit` → 0 errores
 - Webhook con dos notificaciones concurrentes del mismo pago → se aplica una sola vez
 - Reserva 19:00 en Bogotá → `slot_inicio` 00:00 UTC del día siguiente, listada en su día local
 - Foto subida a `canchas` → servida pública como WebP; al borrarla desaparece de la base y del bucket
 - **Pago end to end en sandbox (2026-11-17)**: pago `190172054268` aprobado con buyer test user; el webhook lo aplicó 65 s después de crearse el registro; la reserva quedó en `PAGO_PARCIAL` con $80.000 pagados sobre $160.000 y el turno ocupado
+- **Ciclo completo (2026-11-18)**: saldo pagado con tarjeta → reserva `CONFIRMADA`, $160.000 de $160.000. El pago quedó con `metodo` TARJETA_CREDITO, `entidad` MASTER y `comision` **$4.088 (5,11%)**
+- **Rechazo clasificado (2026-11-19)**: tarjeta de prueba `FUND` → `detalle_estado` `cc_rejected_insufficient_amount`, comisión 0, la reserva intacta y el jugador viendo «La tarjeta no tiene fondos suficientes»
 
 ---
 
