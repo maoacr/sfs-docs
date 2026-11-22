@@ -33,7 +33,7 @@ El runtime necesita estas. Todas van en el entorno **Production** del proyecto.
 
 Opcionales: `DB_MAX_CONNECTIONS` (default 10) y `EMAIL_FROM` (tiene fallback).
 
-`DIRECT_URL` **no hace falta en Vercel**: sólo la usan `drizzle-kit` y los scripts de migración en local. Apunta a `db.<ref>.supabase.co:5432`, que en el plan Free sólo resuelve por IPv6.
+`DIRECT_URL` **no hace falta en Vercel**: sólo la usan `drizzle-kit` y los scripts de migración. En local apunta a `db.<ref>.supabase.co:5432`, que en el plan Free sólo resuelve por IPv6. El workflow `Migraciones` le pasa el *session pooler* a esa misma variable, porque los runners de GitHub no tienen IPv6 — ver [Entornos](/guides/entornos).
 
 :::danger[Las variables van antes del primer build]
 Hay páginas que consultan la base durante el build. Si deployás sin las variables, el build no falla con un claro "falta `DATABASE_URL`": falla en una página cualquiera y te manda a buscar al lugar equivocado.

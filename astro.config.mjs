@@ -47,6 +47,7 @@ export default defineConfig({
 					label: 'Guías',
 					items: [
 						{ label: 'Despliegue', slug: 'guides/despliegue' },
+						{ label: 'Entornos', slug: 'guides/entornos' },
 						{ label: 'Mudanza de dominio', slug: 'guides/dominio' },
 						{ label: 'Autenticación', slug: 'guides/auth' },
 						{ label: 'Seguridad', slug: 'guides/security' },

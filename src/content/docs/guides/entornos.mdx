@@ -1,0 +1,124 @@
+---
+title: Entornos
+description: Los dos proyectos de Supabase de SFS — qué es propio de cada entorno, cómo llegan las migraciones a cada base, y qué hay que configurar por duplicado.
+---
+
+SFS tiene **dos proyectos de Supabase**. Uno sirve a la app desplegada; el otro existe para que desarrollar no signifique escribir en la base de los clientes.
+
+| | Producción | Desarrollo |
+|---|---|---|
+| Nombre | `sfs` | `sfs-dev` |
+| Ref | `nbjnrpktkbrjapamdyvc` | `ivqlbqvhrhosfovkihkv` |
+| Región | `us-east-1` | `us-east-2` |
+| Quién le habla | Vercel (`sfs.maoacr.com`) | `pnpm dev` en la laptop |
+| Migraciones | el workflow `Migraciones` | a mano, desde la laptop |
+
+Antes de esto había **uno solo**, y `pnpm dev` escribía en la base de producción. No era una configuración incorrecta: era la ausencia de configuración, y funcionaba porque todavía no había nada que perder.
+
+## Qué es propio de cada entorno
+
+Esta es la parte que sorprende: un proyecto de Supabase no es "una base de datos". Es una base **más** un servicio de autenticación **más** un servicio de archivos. Separar entornos separa las tres cosas, y cada una hay que configurarla dos veces.
+
+| Pieza | Alcance | Qué implica |
+|---|---|---|
+| Base de datos (`public`) | por proyecto | Cada una lleva su propio ledger `drizzle.__drizzle_migrations` |
+| Auth (GoTrue, `auth.users`) | por proyecto | El proveedor de Google, el *Site URL* y los *Redirect URLs* se configuran en los dos |
+| Storage (buckets) | por proyecto | Los crean las migraciones `0003` y `0010`, no la mano |
+| Claves de API (`anon`, `service_role`) | por proyecto | Distintas en cada uno; van en el `.env` correspondiente |
+| `JWT_SECRET` / `JWT_REFRESH_SECRET` | por entorno, **propias** | Son de SFS, no de Supabase. Ver el aviso de abajo |
+| Cliente OAuth de Google | **compartido** | Un solo Client ID, pero **un redirect URI por proyecto** |
+
+:::danger[Las claves JWT de dev tienen que ser distintas a las de producción]
+`JWT_SECRET` y `JWT_REFRESH_SECRET` los usa `src/lib/jwt.ts` para firmar las cookies `sfs_token` / `sfs_refresh`; no tienen nada que ver con Supabase. Si dev y producción comparten el secreto, un token emitido en `localhost` **es válido en producción** — y ahora que las bases están separadas, apunta a un usuario que del otro lado no existe.
+
+```bash
+openssl rand -base64 48   # una por secreto, por entorno
+```
+:::
+
+## Por qué no se hace con un schema
+
+La idea de un schema `dev` dentro de la misma base es tentadora, y técnicamente funciona: las migraciones generadas usan nombres sin calificar (`CREATE TABLE "usuarios"`, no `public.usuarios`), así que resuelven por `search_path`. Se descartó igual:
+
+- **No aísla nada.** Misma base = mismas conexiones, misma CPU, mismo disco, mismo plan de backups. Una query desbocada en dev se come el pool de producción. Reducir el blast radius era el objetivo entero.
+- **No se puede restaurar sin arrastrar producción.** El point-in-time recovery es de la base completa.
+- **`auth` y `storage` no se duplican.** Son servicios del proyecto: habría un solo GoTrue y un solo Storage para los dos entornos.
+- **El ledger de migraciones es uno.** `drizzle.__drizzle_migrations` no distingue en qué schema aplicó cada cosa.
+- **Un segundo proyecto es gratis.** El plan Free admite dos activos.
+
+Schema-per-X sigue siendo el patrón correcto para **multi-tenancy** (un schema por complejo). Para entornos, no.
+
+## Cómo llegan las migraciones a cada base
+
+El migrator de Drizzle es agnóstico del entorno: lee `DIRECT_URL || DATABASE_URL` y aplica sólo lo pendiente según el ledger de *esa* base. Los archivos de `packages/db/drizzle/` son la única fuente de verdad, y cada base recuerda por su cuenta hasta dónde llegó.
+
+```
+1. pnpm --filter @sfs/db generate     el SQL sale de los pgTable
+2. pnpm --filter @sfs/db migrate      → sfs-dev   (.env.local)
+3. probar; si está mal, corregir y resetear dev
+4. commit + PR → CI (typecheck, tests, lint)
+5. merge a main → el workflow aplica a producción
+```
+
+El paso 5 lo hace `.github/workflows/migraciones.yml`, disparado por un push a `main` que toque `packages/db/drizzle/**`. Producción **no se migra desde la laptop**: esa es la regla que justifica el workflow.
+
+### Las migraciones tienen que ser compatibles hacia atrás
+
+El workflow y el deploy de Vercel arrancan con el mismo push, así que corren en paralelo y no hay garantía de orden. La respuesta correcta no es sincronizarlos — es que no importe:
+
+> Agregar columna nullable o con `DEFAULT` → backfillear → y recién en una migración **posterior** volverla `NOT NULL` o borrar la vieja.
+
+Si cada migración es aditiva, el código viejo sigue funcionando contra el schema nuevo y la ventana de carrera deja de existir. `0006_pagos_metodo_canal.sql` y `0007_backfill_metodo_pago.sql` son exactamente este patrón, partido en dos pasos a propósito.
+
+## Checklist por proyecto
+
+Lo que hay que tener en `sfs-dev` para que el login con Google funcione en local:
+
+- **Google Cloud Console → Authorized redirect URIs**: agregar `https://ivqlbqvhrhosfovkihkv.supabase.co/auth/v1/callback`. Es un URI **por proyecto**; el de producción ya estaba y no alcanza.
+- **sfs-dev → Sign In / Providers → Google**: habilitado con el mismo Client ID y Secret que producción.
+- **sfs-dev → URL Configuration**: *Site URL* `http://localhost:3000`, *Redirect URLs* `http://localhost:3000/auth/callback`.
+- **`.env.local`**: las claves de `sfs-dev` y sus propios secretos JWT.
+
+Y del lado de producción, una limpieza que ahora corresponde:
+
+:::caution[Sacar localhost del allow-list de producción]
+Mientras no había entorno de dev, producción tenía que aceptar `http://localhost:3000/auth/callback` para poder probar. Ya no: ese redirect vive en `sfs-dev`. Producción no tiene por qué devolver a la máquina de nadie.
+:::
+
+## Connection strings: cuál usar y dónde
+
+Supabase ofrece tres, y la elección no es cosmética.
+
+| Cadena | Puerto | Dónde sirve |
+|---|---|---|
+| Directa (`db.<ref>.supabase.co`) | 5432 | Sólo local **con IPv6**. En el plan Free no resuelve por IPv4 |
+| Session pooler (`aws-0-<region>.pooler…`) | 5432 | Migraciones. IPv4, y mantiene la sesión |
+| Transaction pooler | 6543 | Runtime de la app. **No sirve para migrar** |
+
+Dos trampas:
+
+1. **Los runners de GitHub no tienen IPv6.** Por eso el secret del workflow es el *session pooler* y no la cadena directa, aunque la variable que lee el script se llame `DIRECT_URL`.
+2. **El pooler de transacción rompe los prepared statements.** `packages/db/src/migrate.ts` crea el cliente con `postgres(url, { max: 1 })` sin `prepare: false`, así que migrar por el 6543 falla. Es la razón de usar el de sesión y de no reutilizar el secret `DATABASE_URL` del keepalive: a `psql` le da igual el modo, al migrator no.
+
+## Secret del repositorio
+
+| Secret | Valor |
+|---|---|
+| `MIGRACIONES_DATABASE_URL` | Session pooler de **producción**, puerto 5432 |
+
+```bash
+gh secret set MIGRACIONES_DATABASE_URL --repo maoacr/sfs-web
+```
+
+El comando pide el valor por stdin, así que no queda en el historial del shell.
+
+## Cómo saber contra qué base estás migrando
+
+`migrate.ts` imprime el destino antes de tocar nada:
+
+```
+🎯 Base destino: aws-0-us-east-2.pooler.supabase.com:5432
+🚀 Aplicando migraciones Drizzle en la base de datos Supabase...
+```
+
+Sólo el host, nunca la connection string completa — lleva la contraseña. Si esa línea dice `us-east-1`, estás por migrar producción desde la laptop, que es justo lo que este diseño quiere evitar.
