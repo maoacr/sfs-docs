@@ -224,9 +224,61 @@ el código es el hecho estable y consultable *(«¿cuántas ventas perdí por fo
 insuficientes?»)* mientras que el texto es presentación.
 
 `src/lib/resultado-pago.ts` lo traduce a una línea mostrable y a un
-`reintentable`. Ese booleano no es decorativo: ante
-`cc_rejected_duplicated_payment` volver a ofrecer el botón de pagar es invitar
-a pagar dos veces.
+`reintentable`. Ese booleano no es decorativo: ante un pago **en curso**, volver
+a ofrecer el botón es invitar a pagar dos veces.
+
+#### `reintentable` es la opinión de MP, no la decisión
+
+`explicarPago` traduce lo que dijo MercadoPago. **Quien decide es
+`sePuedeReintentarElPago`**, y para decidir necesita algo que MP no sabe:
+cuánta plata entró en *esta* reserva.
+
+La diferencia la encontró la tarjeta **DUPL** del sandbox. La ventana de
+duplicados de MP compara tarjeta y monto entre **todas sus operaciones**, no por
+reserva nuestra:
+
+:::danger[El duplicado mataba reservas sin pagar]
+Un jugador que pagó otra cancha hace un rato y reserva otra por el mismo monto
+se come un `cc_rejected_duplicated_payment` sobre una reserva **donde nunca
+entró un peso**.
+
+Con el botón escondido, esa reserva se quedaba en `PENDIENTE_PAGO` con cero
+pagado hasta que el TTL la expiraba: la persona **perdía la cancha sin haber
+pagado y sin forma de pagar**. MP encima le decía «no te preocupes que tu pago
+anterior se efectuó con éxito», que era cierto en el mundo de MP y falso sobre
+esa reserva.
+
+El riesgo de pagar dos veces existe sólo si en ESTA reserva ya entró plata, y
+eso lo dice `montoPagado`. Es la misma clase de confusión que el bug del saldo:
+dos preguntas que suenan parecido.
+:::
+
+| Situación | ¿Se ofrece pagar? |
+|---|---|
+| Sin intentos, o MP no dijo nada concreto | Sí |
+| Último pago **aprobado** | Sí — no dice nada sobre el saldo que queda |
+| Rechazo común (fondos, banco, datos) | Sí |
+| Pago **en curso** (`pending_*`, `in_process`) | **No** — puede acreditarse solo |
+| Duplicado, con plata en la reserva | **No** — ahí sí se pagaría dos veces |
+| Duplicado, reserva en cero, pasados 3 minutos | **Sí** |
+
+**Por qué los tres minutos.** Si el cobro «duplicado» fue sobre esta reserva y
+su webhook todavía no llegó, `montoPagado` dice cero por un rato aunque la
+plata haya entrado. La espera convierte esa carrera en un dato: pasados esos
+minutos, seguir en cero significa que de verdad no entró nada. Son tres contra
+un TTL de quince, y es exactamente lo que el mensaje ya le promete al jugador
+—«esperá unos minutos antes de volver a intentar»—, así que ahora la copia y el
+comportamiento coinciden.
+
+#### El dueño ve lo que vio el jugador
+
+`GET /api/reservas` devuelve `ultimoPago`, y el panel del día lo **ignoraba**:
+el jugador decía «ya pagué» y el dueño no tenía con qué responderle.
+
+La fila muestra el último intento que no se acreditó con **el mismo mensaje que
+leyó el jugador**, no con una traducción propia para el dueño. Así el mostrador
+sabe exactamente qué dice la pantalla de la persona que tiene enfrente, y no hay
+dos vocabularios que se desincronicen.
 
 :::note[El mapa es incompleto a propósito]
 MercadoPago agrega códigos cuando quiere. Lo desconocido cae en el mensaje
@@ -236,7 +288,8 @@ nunca rompe ni miente**. Hay un test que lo fija.
 Dos decisiones del mapa que conviene no revertir sin pensarlas: a quien cae en
 un filtro de riesgo **no se le dice** que cayó en un filtro de riesgo —no puede
 hacer nada con eso salvo asustarse—, y el duplicado es el único caso donde
-reintentar es *peligroso* en vez de inútil.
+reintentar *podría* ser peligroso en vez de inútil. «Podría», porque depende de
+nuestro `montoPagado` y no de MP: ver arriba.
 :::
 
 ### Expiración de intentos abandonados
