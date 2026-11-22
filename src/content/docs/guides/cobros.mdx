@@ -121,9 +121,60 @@ La pantalla de cuentas por cobrar filtra **por saldo, no por estado**: se puede
 deber estando `PENDIENTE_PAGO`, `PAGO_PARCIAL` o `COMPLETADA`. El endpoint es
 `GET /api/reservas?conSaldo=true`.
 
+### Cobrar al agendar
+
+El dueño que anota una reserva en el mostrador declara qué pasó con la plata.
+Son **tres hechos distintos**, no un monto con casos borde:
+
+| Elección | Qué viaja al API | Dónde queda la reserva |
+|---|---|---|
+| **Cobré todo** (default) | `metodo` (+ `entidad`) | `CONFIRMADA`, sin saldo |
+| **Cobré un abono** | `montoPagado`, `metodo` (+ `entidad`) | `PAGO_PARCIAL` con el saldo |
+| **No cobré nada** | `montoPagado: 0`, sin método | `CONFIRMADA` debiendo todo |
+
+:::danger[Antes esto registraba plata que no había entrado]
+El formulario no mandaba `montoPagado` ni `metodo`, y el API asume lo máximo
+cuando no se los mandan:
+
+```ts
+const cobrado = esOwner ? Math.min(montoPagado ?? montoTotal, montoTotal) : 0;
+// ...
+metodo: metodo ?? "EFECTIVO",
+```
+
+Resultado: **toda reserva manual dejaba una fila en `pagos` por el total, en
+efectivo** — cobrara el dueño o no. Quien agendaba para el jueves y cobraba el
+jueves tenía la caja mintiendo desde el lunes, y los reportes lo tomaban como
+plata que entró.
+:::
+
+**«Cobré todo» no manda monto a propósito.** El precio lo calcula el motor de
+tarifas en el servidor y el navegador no lo conoce: mandar un número adivinado
+desde el cliente sería inventar el total. Por la misma razón, si en «cobré un
+abono» el monto se pasa del precio, el servidor lo recorta con `Math.min` y la
+reserva queda sin saldo.
+
+**Sin plata no se pregunta cómo entró.** Mandar un método con cero cobrado
+sería registrar la forma de un pago que no existió.
+
+#### Por qué «no cobré nada» es CONFIRMADA y no PAGO_PARCIAL
+
+Un abono es **plata que entró y no alcanzó**. Sin plata no hay abono.
+
+`PAGO_PARCIAL` significa «pagó al menos el mínimo» y **nunca expira**: usarlo
+con cero cobrado dejaría el turno ocupado para siempre afirmando un pago
+inexistente —y la notificación avisando de un abono que nadie recibió—. El
+dueño que agenda sin cobrar **garantiza** el turno, así que la reserva queda
+`CONFIRMADA` y la deuda la lleva `saldo_pendiente`, que es el eje donde vive el
+dinero y lo que la pone en cuentas por cobrar.
+
+Es la misma decisión de los ejes, aplicada del otro lado: igual que una
+`COMPLETADA` puede deber, una `CONFIRMADA` puede deber todo.
+
 ### Métodos
 
-El formulario del mostrador ofrece cinco opciones, no las siete del enum:
+Los **dos** formularios del mostrador —el cobro de un saldo y la reserva
+manual— ofrecen cinco opciones, no las siete del enum:
 
 ```
 Efectivo · Transferencia o billetera · Tarjeta débito · Tarjeta crédito · Otro
@@ -137,6 +188,13 @@ lado es un solo hecho.
 
 Nequi, Daviplata y Bancolombia son los tres `TRANSFERENCIA` y se distinguen por
 `entidad`. El efectivo es el único que no la pide: no hay institución detrás.
+
+La lista y la regla de la entidad viven en un solo lugar
+(`src/lib/metodos-de-mostrador.ts`) porque las consumen esos dos formularios.
+Con una lista por pantalla, el día que se agregue un método el dueño tendría
+dos realidades según dónde esté parado. No van en `metodo-pago.ts`: ese módulo
+traduce el payload de MercadoPago, y **qué reporta MP** y **qué puede elegir el
+dueño** son dos vocabularios que casualmente comparten el enum.
 
 Ver [las tres dimensiones del pago](/guides/mercadopago/#las-tres-dimensiones-del-pago).
 
