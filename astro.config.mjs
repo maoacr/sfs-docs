@@ -51,6 +51,7 @@ export default defineConfig({
 						{ label: 'Mudanza de dominio', slug: 'guides/dominio' },
 						{ label: 'Autenticación', slug: 'guides/auth' },
 						{ label: 'Seguridad', slug: 'guides/security' },
+						{ label: 'Rate limiting, de cero', slug: 'guides/rate-limiting' },
 						{ label: 'MercadoPago', slug: 'guides/mercadopago' },
 						{ label: 'Cobros y saldos', slug: 'guides/cobros' },
 						{ label: 'Email (Resend)', slug: 'guides/email' },
