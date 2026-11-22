@@ -90,6 +90,19 @@ Dos decisiones deliberadas:
 - **Sin `createdAt` la reserva sigue ocupando.** Nunca se libera un turno por falta de información. Lo mismo si la fecha no se puede parsear.
 - **`POST /api/reservas` aplica la misma regla en SQL** (`reservaOcupaElTurno`, en `src/lib/consultas.ts`), armada con las mismas constantes. Si la lectura y la escritura discreparan, la grilla mostraría el turno libre y la reserva fallaría con `409`.
 
+:::note[No confundir con «las reservas que valen»]
+Esta tabla contesta **¿el turno está libre?**. Hay otra pregunta parecida que
+se contesta distinto: **¿esta reserva cuenta?**, la de los reportes y el panel
+del dueño, que vive en `ESTADOS_EFECTIVOS` (`src/lib/consultas.ts`) y vale para
+`PAGO_PARCIAL`, `CONFIRMADA` y `COMPLETADA`.
+
+La diferencia que importa es `COMPLETADA`: **no ocupa** el turno —el partido ya
+se jugó, la cancha está libre— pero **sí cuenta** como reserva. Son tres
+vocabularios de estados sobre la misma tabla (ocupación, el constraint de la
+base, y las que valen) y mezclarlos es justo cómo aparecen los bugs de esta
+familia.
+:::
+
 ### La base cuenta distinto, y a propósito
 
 Hay un **tercer** lugar que decide quién ocupa un turno, y no puede usar la

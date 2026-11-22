@@ -213,7 +213,31 @@ Un id de la ruta que no es UUID responde `404` sin consultar la base.
 | Parámetro | Tipo | Descripción |
 |---|---|---|
 | `fecha` | `YYYY-MM-DD` | Filtra por día **en la zona horaria del complejo** de cada reserva |
-| `estado` | `PENDIENTE_PAGO\|CONFIRMADA\|COMPLETADA\|CANCELADA` | Filtra por estado |
+| `estado` | `PENDIENTE_PAGO\|PAGO_PARCIAL\|CONFIRMADA\|COMPLETADA\|CANCELADA\|EXPIRADA` | Filtra por **un** estado exacto |
+| `efectivas` | `true` | Las reservas que valen: `PAGO_PARCIAL`, `CONFIRMADA` o `COMPLETADA` |
+| `conSaldo` | `true` | Cuentas por cobrar: saldo mayor a cero y no muertas |
+
+:::caution[Un parámetro vacío no filtra nada]
+Los filtros se aplican con `if (fecha)`, `if (estado)`, etc. Mandar
+`?fecha=` —el string vacío— **no** significa "hoy" ni "ninguna": significa
+**no filtres por día**, y la respuesta trae la historia entera.
+
+Ese fue exactamente el bug del dashboard del dueño: pedía `?fecha=` creyendo
+que preguntaba por hoy, y durante semanas mostró reservas de cualquier día bajo
+un título que decía "hoy". Si el cliente quiere el día de hoy, tiene que
+mandarlo: `?fecha=${fechaHoy()}`.
+:::
+
+#### Por qué `efectivas` y no una lista de estados
+
+`efectivas=true` es un filtro propio en vez de `estado=PAGO_PARCIAL,CONFIRMADA,COMPLETADA`
+a propósito, igual que `conSaldo`. **Qué estados cuentan como una reserva que
+vale es una regla de negocio**, y vive en `ESTADOS_EFECTIVOS`
+(`src/lib/consultas.ts`). Si cada pantalla enumera los estados que le parecen,
+cada pantalla termina con su propia versión de la regla — y el día que la regla
+cambie hay que encontrarlas todas.
+
+`estado` sigue existiendo para el caso de uno exacto; no se reemplaza.
 
 ### Crear reserva
 
