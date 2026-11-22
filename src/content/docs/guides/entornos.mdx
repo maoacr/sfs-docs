@@ -100,17 +100,36 @@ Dos trampas:
 1. **Los runners de GitHub no tienen IPv6.** Por eso el secret del workflow es el *session pooler* y no la cadena directa, aunque la variable que lee el script se llame `DIRECT_URL`.
 2. **El pooler de transacción rompe los prepared statements.** `packages/db/src/migrate.ts` crea el cliente con `postgres(url, { max: 1 })` sin `prepare: false`, así que migrar por el 6543 falla. Es la razón de usar el de sesión y de no reutilizar el secret `DATABASE_URL` del keepalive: a `psql` le da igual el modo, al migrator no.
 
-## Secret del repositorio
+## Secrets del repositorio
 
-| Secret | Valor |
-|---|---|
-| `MIGRACIONES_DATABASE_URL` | Session pooler de **producción**, puerto 5432 |
+| Secret | Valor | Lo usa |
+|---|---|---|
+| `MIGRACIONES_DATABASE_URL` | Session pooler de **producción**, puerto 5432 | `migraciones.yml` |
+| `DATABASE_URL` | Pooler de **producción** | `supabase-keepalive.yml` |
+| `DATABASE_URL_DEV` | Pooler de **sfs-dev** | `supabase-keepalive.yml` |
 
 ```bash
-gh secret set MIGRACIONES_DATABASE_URL --repo maoacr/sfs-web
+gh secret set DATABASE_URL_DEV --repo maoacr/sfs-web
 ```
 
 El comando pide el valor por stdin, así que no queda en el historial del shell.
+
+## Que ninguna de las dos se pause
+
+Supabase [pausa los proyectos del plan Free](https://supabase.com/docs/guides/platform/free-project-pausing) tras 7 días sin suficiente actividad de usuario. `supabase-keepalive.yml` corre tres veces al día y hace un `count(*)` sobre `reservas` en cada base.
+
+El riesgo no es el mismo en las dos:
+
+| | ¿Se pausaría sin el keepalive? |
+|---|---|
+| Producción | **No.** El cron de Vercel (`/api/cron/liberar-expiradas`, diario) más el tráfico real ya generan actividad de sobra. Su ping quedó redundante y se mantiene sólo como red de seguridad |
+| `sfs-dev` | **Sí.** No recibe tráfico: la toca `pnpm dev` y nada más. Una semana sin programar y el proyecto se pausa |
+
+Es un **job por entorno** (matrix con `fail-fast: false`), no dos pasos en el mismo job. Con `set -euo pipefail`, un fallo en el primer paso aborta el job y el segundo nunca corre — o sea que un problema en producción haría que dev se pausara en silencio. Separados, cada base se pingea por su cuenta.
+
+:::note[Para `psql` da igual el modo del pooler]
+A diferencia de las migraciones, acá sirve tanto el pooler de sesión como el de transacción: `psql` no usa prepared statements. Lo que **no** sirve es la conexión directa, por el IPv6.
+:::
 
 ## Cómo saber contra qué base estás migrando
 
