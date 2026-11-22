@@ -32,6 +32,36 @@ Al jugador se le dice que tiene saldo; al dueño, que le cobre a esa persona
 antes de agendarle.
 :::
 
+### El mostrador se entera al elegir al cliente
+
+El bloqueo se aplica en el servidor, pero avisar recién ahí es inútil para
+quien está atendiendo. Antes, el dueño elegía cancha, fecha, hora, tipo de
+cobro y método, mandaba el formulario y **entonces** comía el 403: el aviso
+llegaba al final de un formulario que ya no servía.
+
+Por eso `GET /api/clientes?q=` devuelve `saldoPendiente` junto con cada
+persona, y el modal de reserva manual lo muestra **al elegirla**, con el monto,
+y deshabilita "Crear" mientras haya deuda.
+
+El monto que muestra es el mismo que el 403 ya devolvía al dueño. No se expone
+nada nuevo: se evita que el cliente y el servidor cuenten dos historias
+distintas.
+
+:::note[El aviso no es la defensa]
+El 403 de `POST /api/reservas` sigue intacto y es el que garantiza la regla. Lo
+de la UI es un aviso temprano: un formulario deshabilitado no es un control de
+acceso, y cualquier cosa que dependa del navegador para cumplirse no se cumple.
+:::
+
+El saldo de los hasta diez resultados de la búsqueda se pregunta en **una sola
+consulta**: `saldosPendientesDe` toma varios jugadores y agrupa, y
+`saldoPendienteDe` es su caso de uno. La definición en SQL de qué cuenta como
+deuda —sólo `PAGO_PARCIAL`, sin filtro por complejo— vive en un único lugar,
+porque dos consultas para la misma regla se desincronizan solas.
+
+Al invitado sin cuenta no se le avisa nada, porque no hay nada que avisar: su
+deuda no existe en el sistema.
+
 Se sale del bloqueo por dos puertas:
 
 | Puerta | Endpoint |
@@ -219,3 +249,15 @@ fricción al mostrador. El nombre queda en `reservas.invitado_nombre`. Sin esa
 columna la información se perdía, porque `player_id` es `NOT NULL` y termina
 apuntando a la cuenta del propio dueño. El día que esa persona se registre, hay
 un hilo del que tirar.
+
+:::danger[Pendiente: un invitado que queda debiendo bloquea al dueño]
+Como la reserva de un invitado apunta a la cuenta del **dueño**, si queda en
+`PAGO_PARCIAL` con saldo, ese saldo es del dueño. Y como el bloqueo se mide
+contra el titular, el dueño queda sin poder agendar —ni invitados ni a sí
+mismo— hasta que se registre ese cobro. Encima el mensaje que recibiría es el
+de deudor: "Tenés saldo pendiente".
+
+Hoy no hay ninguna reserva de invitado en la base, así que nadie lo pisó.
+Arreglarlo pide una decisión de producto —¿la deuda de un invitado cuenta?, ¿y
+contra quién?— y no se tomó todavía.
+:::
