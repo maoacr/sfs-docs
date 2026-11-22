@@ -59,8 +59,8 @@ consulta**: `saldosPendientesDe` toma varios jugadores y agrupa, y
 deuda —sólo `PAGO_PARCIAL`, sin filtro por complejo— vive en un único lugar,
 porque dos consultas para la misma regla se desincronizan solas.
 
-Al invitado sin cuenta no se le avisa nada, porque no hay nada que avisar: su
-deuda no existe en el sistema.
+El aviso aplica a todos los clientes, porque **todos tienen cuenta**: desde
+que se retiró el camino del invitado, una reserva sin titular no se crea.
 
 Se sale del bloqueo por dos puertas:
 
@@ -290,7 +290,7 @@ dueño** son dos vocabularios que casualmente comparten el enum.
 
 Ver [las tres dimensiones del pago](/guides/mercadopago/#las-tres-dimensiones-del-pago).
 
-## Clientes e invitados
+## Clientes
 
 Al agendar manualmente, el campo **Cliente** busca entre los clientes del dueño
 y vincula la reserva a la cuenta real: la persona la ve en su app, la puede
@@ -302,8 +302,8 @@ sobre el padrón completo convertiría el endpoint en un **enumerador de nombres
 y teléfonos**: cualquier dueño podría tipear dos letras y cosechar datos de
 gente que nunca pisó su cancha.
 
-La contracara es que un cliente nuevo no aparece — y para eso existe el camino
-del invitado.
+La contracara es que un cliente nuevo no aparece — y para eso existe el
+registro en el momento, acá abajo.
 :::
 
 ### Quien no está en el sistema se registra en el momento
@@ -325,6 +325,16 @@ Un invitado que se va debiendo congelaba el mostrador entero.
 Nunca se disparó porque no llegó a haber reservas de invitado. Con cuenta
 propia para cada cliente, la deuda cae donde corresponde y el problema no
 existe.
+:::
+
+:::note[Por qué `createReservaSchema` es `.strict()`]
+`POST /api/reservas` **rechaza** `invitadoNombre` con un 400 en vez de
+ignorarlo. Un campo descartado en silencio deja a quien lo manda creyendo que
+anotó algo — que es exactamente cómo este camino sobreviviría a su propia
+remoción.
+
+La columna `reservas.invitado_nombre` se queda por las filas históricas. Lo que
+se retiró es el camino que escribía en ella.
 :::
 
 **La cuenta nace sin contraseña y todavía no puede entrar.** `login` y
