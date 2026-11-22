@@ -68,7 +68,13 @@ Cada response incluye:
 
 ### Limitación
 
-El rate limiting actual está en memoria. En producción con múltiples instancias (serverless en Vercel), se debe migrar a Redis o Vercel KV para compartir el estado entre instancias.
+El rate limiting actual está **en memoria**, y eso significa que los números de `RATE_LIMITS` no son los que se aplican en producción: el `Map` de contadores se crea una vez por copia de la función, así que el límite real es *por instancia* y Vercel decide cuántas instancias hay.
+
+Con cinco copias calientes, «5 intentos de login por minuto» son veinticinco. Cuanto más fuerte el ataque, más copias levanta Vercel y más alto queda el límite real — el limitador se afloja justo cuando tendría que apretar.
+
+Hay además un segundo detalle: el docstring del módulo dice *sliding window* y la implementación es de **ventana fija**, que permite duplicar el límite en el borde de la ventana.
+
+El diagnóstico completo —qué es Redis, por qué no sirve Postgres para esto, las tres capas, y por qué limitar por IP no alcanza— está en [Rate limiting, de cero](/guides/rate-limiting), explicado sin dar nada por sabido.
 
 ---
 

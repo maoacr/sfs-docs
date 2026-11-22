@@ -1,0 +1,231 @@
+---
+title: Rate limiting, de cero
+description: Qué es un límite de requests, por qué el de SFS hoy no limita lo que dice limitar, y cómo se arregla de verdad — explicado sin dar nada por sabido.
+---
+
+Esta guía existe porque el rate limiting de SFS **no hace lo que parece hacer**, y entender por qué requiere entender tres cosas que no son obvias: cómo corre la app, cómo funciona la memoria de un servidor que no existe, y por qué la herramienta correcta para contar golpes en la puerta no es la misma que para guardar reservas.
+
+No da nada por sabido. Si ya sabés qué es Redis, saltá a [Por qué el de SFS no limita](#por-qué-el-de-sfs-no-limita).
+
+## Qué es un rate limit
+
+Un portero que cuenta.
+
+Alguien toca la puerta y el portero anota la hora. Si la misma persona tocó cinco veces en el último minuto, el portero deja de abrir: *"volvé en un rato"*. No es un castigo, es una forma de que una sola persona no consuma el edificio entero.
+
+En una API es igual. Cada request es un golpe en la puerta, y el límite dice cuántos golpes de la misma persona se aceptan por unidad de tiempo.
+
+### Para qué sirve de verdad
+
+Tres cosas distintas, y conviene no mezclarlas porque pide soluciones distintas:
+
+**Fuerza bruta.** Un robot probando contraseñas. Si puede intentar mil veces por segundo, cualquier contraseña débil cae. Si puede intentar cinco veces por minuto, probar un diccionario de un millón de palabras le lleva casi cuatro años. El límite no hace la contraseña más fuerte: **hace que el tiempo juegue para nosotros**.
+
+**Abuso de recursos ajenos.** `POST /api/auth/recuperar` manda un mail. Sin límite, cualquiera puede pedir mil veces el reseteo de la casilla de otra persona y llenarle el buzón. El daño no lo sufre el sistema: lo sufre un tercero.
+
+**Costo.** Cada invocación de una función en Vercel se paga, y cada consulta a la base consume conexiones. Un bot que consulta disponibilidad en loop no roba nada, pero gasta.
+
+:::note[Los tres no se protegen igual]
+El primero necesita saber **quién** intenta (¿este email ya falló cinco veces?). El tercero sólo necesita saber **cuántos** requests llegan, sin entender nada del dominio. Son capas distintas, y eso es el centro de esta guía.
+:::
+
+## Cómo corre SFS, y por qué importa
+
+Acá está la parte que hay que entender antes que todo lo demás.
+
+Cuando uno imagina "un servidor", imagina **una** computadora prendida, con **una** memoria, atendiendo a todos. Si el portero anota en su cuaderno, hay un cuaderno y todos los golpes van ahí.
+
+**SFS no corre así.** Vercel usa un modelo *serverless*: no hay una computadora prendida esperando. Cuando llega un request, Vercel **levanta una copia** de la función que lo atiende, la ejecuta, y la deja viva un rato por si llega otro. Si llegan muchos requests a la vez, levanta **muchas copias en paralelo**. Si no llega ninguno por un rato, las apaga.
+
+Las consecuencias son dos, y las dos rompen al portero:
+
+**Cada copia tiene su propia memoria.** No comparten nada. Son procesos distintos, posiblemente en máquinas distintas.
+
+**Las copias nacen y mueren todo el tiempo.** Cuando una se apaga, lo que tenía en memoria se tira a la basura.
+
+:::tip[La analogía completa]
+No hay un portero con un cuaderno. Hay **N porteros**, cada uno con su propio cuaderno, que no se hablan entre ellos. Y cada tanto un portero se va a casa y tira su cuaderno.
+
+Si cada uno tiene orden de dejar pasar cinco, el edificio deja pasar **cinco por portero**.
+:::
+
+## Por qué el de SFS no limita
+
+El limitador vive en `web/src/lib/rate-limit.ts`, y guarda los contadores así:
+
+```ts
+const store = new Map<string, RateLimitEntry>();
+```
+
+Un `Map` es una tabla en memoria. Esa línea corre **una vez por copia de la función**, así que cada copia arranca con su propio `Map` vacío.
+
+Entonces, con el límite de login en 5 por minuto:
+
+| Copias calientes | Intentos de login que acepta por minuto |
+|---|---|
+| 1 | 5 |
+| 5 | 25 |
+| 20 | 100 |
+
+Y el número de copias **no lo controla nadie**: lo decide Vercel según el tráfico. Cuanto más fuerte el ataque, más copias levanta, más alto queda el límite real. El limitador se afloja justo cuando más tendría que apretar.
+
+Encima, un *cold start* —una copia nueva— arranca el contador en cero. Un atacante que espacie los intentos puede caer siempre en copias frescas.
+
+:::danger[Lo que esto significa en concreto]
+Los números de `RATE_LIMITS` —5 intentos de login por minuto, 3 recuperaciones cada 15— **no son los que se aplican en producción**. Son el límite *por copia*, y no hay forma de saber cuántas copias hay.
+
+El código no está mal escrito: los baldes y los headers están bien pensados. El problema es que el estado está en el lugar equivocado.
+:::
+
+### Un segundo detalle: la ventana es fija, no deslizante
+
+El docstring del módulo dice *"sliding window"* (ventana deslizante), pero la implementación es de **ventana fija**:
+
+```ts
+if (!entry || now > entry.resetAt) {
+  store.set(key, { count: 1, resetAt: now + windowMs });
+}
+```
+
+`resetAt` se fija cuando se abre la ventana y **no se mueve más**. Los requests siguientes sólo incrementan el contador hasta que esa hora pasa, y ahí empieza una ventana nueva desde cero.
+
+La diferencia no es académica:
+
+- **Ventana fija**: de 10:00:00 a 10:01:00 se aceptan 5. A las 10:01:00 el contador vuelve a cero. Entonces alguien puede meter **5 a las 10:00:59 y otros 5 a las 10:01:01**: diez intentos en dos segundos, sin violar ningún límite.
+- **Ventana deslizante**: en todo momento se mira "los últimos 60 segundos". Esos diez intentos en dos segundos se detectan, porque la ventana se mueve con el reloj.
+
+El burst en el borde es el precio de la ventana fija. Para 100 requests/min de cortesía da igual; para 5 intentos de contraseña, duplicar el límite en el momento justo sí importa.
+
+## Qué es Redis
+
+Una base de datos que guarda todo en **memoria RAM** en vez de en disco.
+
+Eso tiene dos consecuencias que la vuelven perfecta para esto:
+
+**Es rapidísima.** Leer de RAM es miles de veces más rápido que leer de disco. Un contador se lee y se escribe en microsegundos.
+
+**Olvida a propósito.** A cada dato se le puede poner una fecha de vencimiento (un *TTL*, *time to live*): *"esto se borra solo en 60 segundos"*. No hay que limpiar nada; se limpia solo.
+
+Y trae la operación exacta que un contador necesita, hecha de fábrica: **`INCR`** suma uno y devuelve el valor nuevo, en un solo paso indivisible. Eso último —*indivisible*, o **atómico**— significa que si dos copias de la función incrementan al mismo tiempo, el resultado es 2 y no 1. Nunca se pierde una cuenta.
+
+:::tip[Redis es el cuaderno compartido]
+Volviendo a los porteros: Redis es un cuaderno único, en el centro del hall, donde **todos** anotan y todos leen. No importa cuántos porteros haya ni cuántos se vayan a casa: el cuaderno es uno.
+:::
+
+## Qué es Upstash, y por qué ese y no otro
+
+Redis es el programa. Alguien tiene que correrlo en algún lado.
+
+**Upstash es una empresa que corre Redis por vos.** Te da una URL y una contraseña, y listo: no administrás servidores ni actualizaciones. Tiene un plan gratuito que alcanza de sobra para el volumen de SFS, y se instala desde el **Marketplace de Vercel** —el catálogo de servicios que Vercel integra—, que además inyecta las variables de entorno en el proyecto sin que haya que copiarlas a mano.
+
+Pero la razón técnica por la que es *Upstash* y no cualquier Redis es otra, y es específica de serverless:
+
+**Un Redis normal se habla por una conexión TCP que se mantiene abierta.** Eso funciona bien cuando hay un servidor prendido: abre la conexión una vez y la usa para siempre. En serverless es un problema: hay muchas copias efímeras, cada una querría su conexión, y un Redis tiene un techo de conexiones simultáneas. Es el mismo dolor que ya conocés con Postgres — por eso SFS necesita el *pooler*.
+
+**Upstash expone Redis por HTTP.** Cada operación es un request suelto, como llamar a cualquier API. No hay conexión que mantener, así que no hay nada que se agote. Para un mundo de funciones que nacen y mueren, eso es exactamente lo que hace falta.
+
+:::note[«Vercel KV», que es lo que te mencioné antes]
+Vercel tuvo su propio producto de almacenamiento clave-valor con marca propia, **Vercel KV**, que por debajo era Upstash. Vercel movió ese modelo al Marketplace, así que hoy el camino es instalar el servicio directamente.
+
+Esto cambia seguido, así que al momento de hacerlo conviene mirar qué ofrece el Marketplace en ese momento en vez de confiar en esta guía.
+:::
+
+## Por qué no Postgres, que ya lo tenemos
+
+Es la pregunta correcta: hay una base andando, ¿para qué sumar otra pieza?
+
+La respuesta corta: **Postgres está construido para lo contrario de lo que un contador necesita.**
+
+**Garantías que no queremos pagar.** Postgres garantiza que lo que escribiste sobrevive a un corte de luz. Para eso escribe cada cambio dos veces (primero a un registro de transacciones, después a la tabla). Eso es indispensable para una reserva o un pago. Para "¿cuántas veces tocó este tipo en el último minuto?" es absurdo: si se pierde, no pasa nada. Nadie reclama un contador.
+
+**Cada request sería una escritura, y las escrituras dejan basura.** En Postgres modificar una fila **no la sobrescribe**: escribe una versión nueva y deja la vieja marcada como muerta, para que un proceso de limpieza (*autovacuum*) la junte después. Eso se llama MVCC y es lo que permite que alguien lea mientras otro escribe sin bloquearse.
+
+La consecuencia: una tabla actualizada en **cada request** se convierte en la de mayor movimiento de toda la base, generando basura sin parar y obligando a la limpieza a correr todo el tiempo. Los índices se inflan. Es un antipatrón conocido, no una opinión.
+
+**Más presión donde más duele.** Serverless y Postgres ya se llevan mal por las conexiones. Agregar un viaje a la base en cada request multiplica la demanda sobre la pieza más difícil de escalar.
+
+### Y el argumento que decide
+
+Los tres de arriba son de eficiencia. Este es de diseño:
+
+**Un límite existe para blindar el recurso caro. Si vive adentro de ese recurso, el ataque lo alcanza igual.**
+
+Mil intentos de login por segundo golpean Postgres de todos modos — sólo que ahora, además de leer `usuarios`, escriben el contador. El guardia no puede vivir adentro de la bóveda. Lo que tiene que hacer un límite es decir "no" **rápido y barato**, antes de tocar lo valioso.
+
+## Las capas, que es lo que hace un sistema de verdad
+
+Un límite que corre dentro de la función **ya costó la invocación**. Contra una inundación, se está pagando por decir que no.
+
+Lo correcto son tres capas, y responden preguntas distintas:
+
+| Capa | Dónde | Qué pregunta contesta |
+|---|---|---|
+| **1. El borde** | Cloudflare, o el WAF de Vercel | ¿Llegan demasiados requests de esta IP? |
+| **2. La app** | El código + Redis | ¿Esta *persona* ya falló cinco veces el login? |
+| **3. El negocio** | Las reglas de SFS | ¿Este jugador debe plata? ¿El turno está vendido? |
+
+La capa 1 no entiende nada del dominio: no sabe qué es un login fallido, sólo cuenta paquetes. Pero rechaza **antes** de que Vercel levante una función, así que es la única que protege el costo.
+
+La capa 2 sí entiende: puede limitar por email, por usuario, por reserva. Pero para opinar ya tuvo que ejecutarse.
+
+La capa 3 es la que SFS ya tiene bien: el [saldo que bloquea reservar](/guides/cobros#deber-bloquea) y el [constraint que impide vender dos veces el mismo turno](/vision/data-model#un-turno-no-se-puede-vender-dos-veces). Esas no son rate limits, pero son el mismo principio: una regla que se aplica sola y no depende de que nadie se acuerde.
+
+### La capa 1 ya está comprada y apagada
+
+`maoacr.com` usa Cloudflare como DNS. Pero `sfs.maoacr.com` resuelve **directo a Vercel**:
+
+```
+$ dig +short sfs.maoacr.com
+4cf1ebdc5968b5ec.vercel-dns-017.com.
+216.198.79.1
+```
+
+Esas son IPs de Vercel, no de Cloudflare. Es decir: **nube gris** (DNS only). Cloudflare resuelve el nombre y se hace a un lado; el tráfico no pasa por ahí, así que sus defensas no se aplican.
+
+Pasarlo a **nube naranja** lo mete en el camino y habilita sus reglas de rate limiting en el borde. Es un toggle, no código.
+
+:::caution[Pero no se hace a la ligera]
+Con nube naranja hay que poner el SSL mode en **Full (strict)**. Con *Flexible*, Cloudflare habla HTTP con Vercel y Vercel redirige a HTTPS: loop de redirects y el sitio caído. Está documentado en [Mudanza de dominio](/guides/dominio).
+
+Y el tier gratuito de Cloudflare incluye pocas reglas de rate limiting —cuántas exactamente cambia con el tiempo—, así que conviene confirmarlo en el panel antes de planificar sobre eso.
+:::
+
+## Limitar por IP no alcanza, y limitar por email tampoco
+
+Hoy la key del limitador es la IP:
+
+```ts
+return `rate:${bucket}:${ip}`;
+```
+
+Eso tiene dos agujeros opuestos, y los dos importan:
+
+**Por IP de menos.** Un atacante con mil IPs —una botnet, o simplemente proxies baratos— tiene mil veces el límite. La fuerza bruta distribuida pasa por abajo sin esfuerzo.
+
+**Por IP de más.** Toda una oficina, o todos los clientes de un operador móvil con NAT, comparten IP. Cinco intentos por minuto para un edificio entero deja gente afuera sin que nadie haya hecho nada mal.
+
+La respuesta es limitar **por identidad**: cinco intentos por minuto *para este email*. Eso ataja la botnet, porque por más IPs que tenga, el email que ataca es uno.
+
+:::danger[Pero limitar SÓLO por email abre otro ataque]
+Si el único límite es por email, cualquiera puede quemarle los intentos a otra persona: tira cinco logins fallidos contra `victima@gmail.com` y la víctima queda sin poder entrar. El límite pasa de ser una defensa a ser el ataque.
+
+Por eso se usan **los dos a la vez**, con números distintos, y el de identidad **nunca bloquea en seco**: demora, pide un captcha, avisa por mail. Nunca deja la cuenta inaccesible.
+:::
+
+## Qué se recomienda hacer en SFS
+
+Por orden de valor sobre esfuerzo:
+
+1. **Capa 2 con Upstash para las rutas donde el límite es seguridad.** Son ocho: las cinco de autenticación (`AUTH_LOGIN`, `AUTH_REGISTER`, `AUTH_RECUPERAR`) y las tres de `STRICT`. Son las de **menor** tráfico del sistema, así que el costo es despreciable y el beneficio es que los números empiecen a ser verdad.
+
+2. **Cambiar la key de IP a IP + identidad** en las de autenticación, con la precaución de arriba: el límite por email demora, no bloquea.
+
+3. **Dejar `DISPONIBILIDAD` y `DEFAULT` en memoria, pero documentadas como best-effort.** Son 32 rutas de lectura y cortesía donde un write por request no se justifica. Lo importante es que el código **diga** que son aproximadas, en vez de aparentar una garantía que no da.
+
+4. **Arreglar el docstring, o la implementación.** Hoy dice "sliding window" y es ventana fija. Si se migra a Upstash, su librería de rate limiting implementa ventana deslizante de verdad y el problema se va solo.
+
+5. **La capa 1 cuando haya tráfico.** Es un toggle de Cloudflare, no código, y hasta que haya volumen no cambia nada.
+
+:::note[Lo que NO hay que hacer]
+Subir los números para "compensar" que el límite es por copia. Eso es afirmar más fuerte algo que no se puede sostener. Mientras el estado esté en memoria, el límite real es desconocido — y un límite desconocido no es un límite, es una decoración.
+:::
