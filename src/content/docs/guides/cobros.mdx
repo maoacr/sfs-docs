@@ -80,6 +80,33 @@ No hizo falta partir el enum. **El eje del pago ya existe** y vive en
 `montoPagado` y `saldoPendiente`; alcanzaba con preguntarle a esos números en
 vez de al estado.
 
+:::note[La regla se cumplía a medias]
+«Cobrar no des-juega un partido» estaba escrito en el código **y sólo valía
+cuando el saldo quedaba en cero**:
+
+```ts
+// antes
+estado: saldoNuevo > 0 ? "PAGO_PARCIAL" : (esCompletada ? "COMPLETADA" : "CONFIRMADA")
+```
+
+Con un abono **parcial** sobre una reserva ya jugada escribía `PAGO_PARCIAL` y
+borraba el hecho de que el partido se jugó. El dueño que cobra la mitad de una
+deuda vieja perdía el dato.
+
+El arreglo es invertir el orden de las preguntas: **«¿se jugó?» va primero**, y
+la respuesta no depende de cuánta plata entró.
+
+```ts
+// ahora
+estado: esCompletada ? "COMPLETADA" : saldoNuevo > 0 ? "PAGO_PARCIAL" : "CONFIRMADA"
+```
+
+Era además el único camino por el que un `UPDATE` metía una fila dentro del
+predicado de `reservas_sin_doble_booking` **viniendo de afuera**. Arreglarlo
+dejó una propiedad más simple de sostener: al predicado sólo se entra por un
+`INSERT`. Ver [modelo de datos](/vision/data-model#un-turno-no-se-puede-vender-dos-veces).
+:::
+
 ## Pagar después de que pasó la fecha
 
 Se puede, y debe seguir pudiéndose. La deuda no caduca porque el partido se

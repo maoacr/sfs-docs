@@ -75,6 +75,9 @@ No alcanza con mirar el estado: un `PENDIENTE_PAGO` también tiene edad. La deci
 | `PENDIENTE_PAGO` | Sólo dentro del TTL de 15 minutos |
 | `CANCELADA`, `EXPIRADA`, `COMPLETADA` | Nunca |
 
+Esta tabla describe la **lectura**. La base cuenta `PENDIENTE_PAGO` de otra
+manera y no puede evitarlo — ver [La base cuenta distinto](#la-base-cuenta-distinto-y-a-propósito).
+
 ```ts
 if (ESTADOS_QUE_SIEMPRE_OCUPAN.includes(reserva.estado)) return true;
 if (reserva.estado !== ESTADO_QUE_VENCE) return false;
@@ -86,6 +89,45 @@ Dos decisiones deliberadas:
 
 - **Sin `createdAt` la reserva sigue ocupando.** Nunca se libera un turno por falta de información. Lo mismo si la fecha no se puede parsear.
 - **`POST /api/reservas` aplica la misma regla en SQL** (`reservaOcupaElTurno`, en `src/lib/consultas.ts`), armada con las mismas constantes. Si la lectura y la escritura discreparan, la grilla mostraría el turno libre y la reserva fallaría con `409`.
+
+### La base cuenta distinto, y a propósito
+
+Hay un **tercer** lugar que decide quién ocupa un turno, y no puede usar la
+misma regla: el constraint `reservas_sin_doble_booking` (ver
+[modelo de datos](/vision/data-model#un-turno-no-se-puede-vender-dos-veces)).
+
+| | ¿Qué ocupa el turno? |
+|---|---|
+| Lectura — `reservaBloqueaTurno` | `CONFIRMADA`, `PAGO_PARCIAL`, y `PENDIENTE_PAGO` **dentro del TTL** |
+| Escritura — `reservaOcupaElTurno` | Lo mismo, traducido a SQL |
+| Constraint en la base | `CONFIRMADA`, `PAGO_PARCIAL`, y **todo** `PENDIENTE_PAGO` |
+
+La base no puede preguntar la hora: el predicado de un `EXCLUDE` tiene que ser
+`IMMUTABLE`. Entonces cuenta todo `PENDIENTE_PAGO` como ocupante, y queda
+**más estricta** que las otras dos.
+
+:::caution[Lo que esa asimetría provocaría si nadie la cerrara]
+Un `PENDIENTE_PAGO` ya vencido que el barrido global todavía no asentó: la
+grilla muestra el turno **libre** y la base lo rechaza con un `23P01`. Una
+reserva legítima muerta por un turno que de verdad estaba disponible.
+:::
+
+El cierre es `liberarTurnoVencido` (`src/lib/ttl.ts`). Antes de insertar,
+`POST /api/reservas` **espera** el asentado de lo vencido **de ese turno**:
+
+```ts
+await liberarTurnoVencido({ canchaId, inicio, fin });
+```
+
+Acotado a la cancha y al rango toca, como mucho, las dos o tres filas que de
+verdad compiten por ese turno. Esperar el barrido global sería pagar su costo
+entero —un `UPDATE` sobre toda la tabla y una notificación por fila— en el
+camino crítico de una reserva.
+
+Después de ese `await`, la base y la aplicación dicen lo mismo. El barrido
+global (`liberarReservasExpiradas`) sigue siendo **housekeeping**: lo corre el
+cron y las rutas lo disparan sin esperarlo. Los dos se arman con
+`pendientesVencidas()`, así que no pueden divergir en el corte de edad.
 
 Esto cubre todos los casos:
 - Reserva que empieza antes y termina durante el slot ✅

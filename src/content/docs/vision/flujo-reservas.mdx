@@ -50,7 +50,7 @@ Jugador selecciona slot
 
 1. **Cuando un jugador selecciona un slot** para reservar, el sistema crea una reserva en estado `PENDIENTE_PAGO`.
 
-2. **El slot queda BLOQUEADO** — ningún otro jugador puede reservar ese horario mientras exista una reserva que lo ocupe: `CONFIRMADA` y `PAGO_PARCIAL` siempre, `PENDIENTE_PAGO` sólo dentro del TTL.
+2. **El slot queda BLOQUEADO** — ningún otro jugador puede reservar ese horario mientras exista una reserva que lo ocupe: `CONFIRMADA` y `PAGO_PARCIAL` siempre, `PENDIENTE_PAGO` sólo dentro del TTL. Desde la migración `0011` esto **lo garantiza la base**, no el código: ver [Un turno no se puede vender dos veces](/vision/data-model#un-turno-no-se-puede-vender-dos-veces).
 
 3. **TTL de 15 minutos**: pasados 15 minutos sin pago, la reserva deja de ocupar el turno y el slot vuelve a aparecer disponible **al instante**, sin esperar a ningún job. Ver [TTL — Liberación del turno](#ttl--liberación-del-turno).
 
@@ -126,11 +126,34 @@ Las dos se construyen con las mismas constantes —`ESTADOS_QUE_SIEMPRE_OCUPAN`,
 
 La consecuencia importante: **el turno queda libre en el instante en que expira**, con latencia cero y sin depender de que nada se haya ejecutado.
 
+### La escritura sí necesita que esté asentado
+
+Lo de arriba vale para **leer**. Para **escribir** hay un tercer actor que no
+puede evaluar el TTL: el constraint `reservas_sin_doble_booking`. El predicado
+de un `EXCLUDE` tiene que ser `IMMUTABLE`, así que no puede preguntar la hora y
+cuenta **todo** `PENDIENTE_PAGO` como ocupante — también los vencidos.
+
+O sea que una fila vencida que nadie asentó todavía bloquea en la base un turno
+que la grilla muestra libre. Por eso `POST /api/reservas`, antes de insertar,
+**espera** un asentado acotado a esa cancha y a ese rango:
+
+```ts
+await liberarTurnoVencido({ canchaId, inicio, fin });
+```
+
+Acotado toca, como mucho, las dos o tres filas que de verdad compiten por ese
+turno — a diferencia del barrido global, que haría un `UPDATE` sobre toda la
+tabla y una notificación por fila en el camino crítico de una reserva. Los dos
+se arman con `pendientesVencidas()` para que no puedan divergir en el corte de
+edad.
+
+Después de ese `await`, la base y la aplicación dicen lo mismo.
+
 ### Limpieza de estado (housekeeping)
 
 Aparte, hay dos disparadores que persisten el `CANCELADA` y mandan la notificación de expiración:
 
-1. **Limpieza oportunista** — `liberarReservasExpiradas()` se invoca *fire-and-forget* al consultar disponibilidad (`GET /api/disponibilidad`) y al crear una reserva (`POST /api/reservas`). No se espera su resultado, así que **no se puede confiar en ella para decidir disponibilidad** — compite con el `SELECT` de la misma request. Por eso la regla vive en la consulta.
+1. **Limpieza oportunista** — `liberarReservasExpiradas()` se invoca *fire-and-forget* al consultar disponibilidad (`GET /api/disponibilidad`) y al crear una reserva (`POST /api/reservas`). No se espera su resultado, así que **no se puede confiar en ella para decidir disponibilidad** — compite con el `SELECT` de la misma request. Por eso la regla vive en la consulta. Lo que la escritura necesita asentado lo cubre `liberarTurnoVencido`, que **sí** se espera (ver arriba).
 
 2. **Vercel Cron** — `GET /api/cron/liberar-expiradas`, **una vez por día** (`0 4 * * *`).
 
