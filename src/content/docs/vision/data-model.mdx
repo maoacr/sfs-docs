@@ -334,6 +334,8 @@ Define los días y horarios en que una cancha está disponible.
 
 **Decisión**: No usamos `DATERANGE` ni `TSRANGE` para los slots porque los horarios son semanales, no por fecha específica. La disponibilidad real en una fecha se calcula: `slot_configs` − `reservas` en ese rango.
 
+Esto habla de **`slot_configs`**, el horario semanal. Las `reservas` sí usan un rango —`tstzrange(slot_inicio, slot_fin)`— pero no como columna: lo construye el constraint que impide vender dos veces el mismo turno. Un horario semanal no tiene fechas que meter en un rango; una reserva sí.
+
 ### `tarifas`
 
 Motor de precios dinámicos. Una cancha puede tener múltiples tarifas que compiten por "quién aplica".
@@ -386,7 +388,7 @@ El evento central del sistema. Un jugador reserva una cancha en un slot específ
 | `monto_total` | `DECIMAL(10,2)` | Precio final aplicado (calculado al reservar) |
 | `monto_pagado` | `DECIMAL(10,2) DEFAULT 0` | Suma de pagos aprobados |
 | `saldo_pendiente` | `DECIMAL(10,2) DEFAULT 0` | `monto_total - monto_pagado` |
-| `estado` | `ENUM('PENDIENTE_PAGO','PAGO_PARCIAL','CONFIRMADA','COMPLETADA','CANCELADA')` | |
+| `estado` | `ENUM('PENDIENTE_PAGO','PAGO_PARCIAL','CONFIRMADA','CANCELADA','EXPIRADA','COMPLETADA')` | |
 | `deleted_at` | `TIMESTAMPTZ` | |
 
 **Decisiones**:
@@ -396,7 +398,106 @@ El evento central del sistema. Un jugador reserva una cancha en un slot específ
 - `monto_pagado` y `saldo_pendiente` se actualizan con cada pago aprobado vía webhook.
 - Jugadores con `saldo_pendiente > 0` en cualquier reserva no pueden crear nuevas reservas (bloqueo por saldo).
 - `slot_inicio` y `slot_fin` validan contra `slot_configs` de la cancha.
-- **Constraint UNIQUE**: No puede haber dos reservas confirmadas para la misma cancha con solapamiento de horario.
+- **El turno es único, y lo garantiza la base.** Ver [Un turno no se puede
+  vender dos veces](#un-turno-no-se-puede-vender-dos-veces) más abajo. No es un
+  `UNIQUE`: un `UNIQUE` compara valores iguales y acá el choque es un
+  **solapamiento de rangos**, que es otra pregunta.
+
+### Un turno no se puede vender dos veces
+
+```sql
+CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA extensions;
+
+ALTER TABLE reservas
+  ADD CONSTRAINT reservas_sin_doble_booking
+  EXCLUDE USING gist (
+    cancha_id extensions.gist_uuid_ops WITH =,
+    tstzrange(slot_inicio, slot_fin, '[)') WITH &&
+  )
+  WHERE (
+    deleted_at IS NULL
+    AND estado IN ('PENDIENTE_PAGO', 'PAGO_PARCIAL', 'CONFIRMADA')
+  );
+```
+
+Hasta la migración `0011` esta invariante **no existía en la base**. La única
+defensa era el `SELECT` previo al `INSERT` en `POST /api/reservas` y
+`POST /api/sync`.
+
+:::danger[Por qué un chequeo en la aplicación no alcanza]
+No es que estuviera mal escrito. **No puede ser correcto por construcción.**
+Entre leer y escribir hay una ventana, y dos requests simultáneos la atraviesan
+los dos: los dos ven el turno libre, los dos insertan. El daño no es una fila
+de más — es un cliente plantado en la cancha con un recibo en la mano.
+
+La unicidad de un rango de tiempo la tiene que garantizar el motor.
+:::
+
+**`btree_gist`** hace falta sólo por `cancha_id`: GiST no sabe indexar una
+igualdad de `uuid` sin esa extensión. El `&&` sobre `tstzrange` ya es nativo. La
+clase de operadores va calificada (`extensions.gist_uuid_ops`) para no depender
+de que el `search_path` incluya el schema donde vive la extensión.
+
+**El rango es medio-abierto (`[)`).** Un turno que termina a las 20 no choca con
+el que arranca a las 20. Es el mismo criterio que el chequeo de la aplicación
+(`slot_inicio < fin AND slot_fin > inicio`); con `[]` la cancha perdería un
+turno de cada dos.
+
+#### Los estados del predicado
+
+| Estado | ¿Entra al constraint? | Por qué |
+|---|---|---|
+| `CONFIRMADA` | Sí | Ocupa el turno |
+| `PAGO_PARCIAL` | Sí | Pagó el mínimo, no expira nunca |
+| `PENDIENTE_PAGO` | Sí | Ver abajo — es el caso interesante |
+| `CANCELADA`, `EXPIRADA` | No | Están muertas |
+| `COMPLETADA` | No | Igual que en `ESTADOS_QUE_SIEMPRE_OCUPAN` |
+
+**`PENDIENTE_PAGO` entra aunque la aplicación lo suelte al vencer el TTL.** El
+predicado de un `EXCLUDE` tiene que ser `IMMUTABLE`, así que no puede preguntar
+la hora: o el estado entra siempre o no entra nunca.
+
+Dejarlo afuera parece lo conservador y es lo peor. Los dos jugadores que
+compiten crearían sus dos `PENDIENTE_PAGO` sin ruido, y el choque estallaría
+recién cuando el webhook de MercadoPago intente pasar el segundo a
+`CONFIRMADA`: **cobrarle la plata y después no poder darle el turno** es el peor
+momento posible para fallar.
+
+El precio de esa decisión se paga en `liberarTurnoVencido`
+(`src/lib/ttl.ts`) — ver [la guía de disponibilidad](/reference/disponibilidad).
+
+**`COMPLETADA` queda afuera a propósito**, para que la base no sea más estricta
+que la aplicación: si lo fuera, el usuario vería el turno libre en la grilla y
+comería un rechazo al reservarlo. Nadie decidió nunca que un partido jugado no
+ocupe su turno —simplemente el caso es siempre pasado y nunca se discutió—. Si
+algún día se cambia, **hay que cambiarlo en los dos lados**.
+
+#### Al predicado sólo se entra por un INSERT
+
+Es la propiedad que hace todo esto seguro, y se sostiene revisando cada
+transición de estado:
+
+| Transición | Dónde | Efecto sobre el predicado |
+|---|---|---|
+| → `CANCELADA` | `ttl.ts`, `cancelacion.ts` | Sale |
+| → `COMPLETADA` | `reservas/[id]` | Sale |
+| Pago aprobado sobre reserva viva | `pagos.ts` | Se queda adentro |
+| Pago aprobado sobre reserva muerta | `pagos.ts` | **Se niega y reembolsa** |
+| Cobro en mostrador | `confirmar-pago` | Se queda del lado en que estaba |
+
+Por eso un `UPDATE` nunca puede levantar un `23P01`. Si alguna vez se agrega
+una transición que **revive** una reserva muerta, esa propiedad se rompe y hay
+que manejar el error en ese camino también.
+
+#### Qué ve quien reserva
+
+El `23P01` se traduce al mismo **409** que ya devolvía el chequeo en memoria
+(`esDobleBooking`, en `src/lib/errores-db.ts`, lo reconoce **por nombre de
+constraint** y no sólo por código). Para quien reserva es el mismo hecho:
+alguien se le adelantó.
+
+En `POST /api/sync` ese 409 además es una mejora medible: antes un 500 hacía
+que el cliente reintentara tres veces antes de descartar la operación.
 
 ### `pagos`
 
@@ -512,9 +613,10 @@ Miembros de un equipo. Tabla pivote entre equipos y usuarios.
 -- Búsqueda geoespacial: "canchas cerca de mí"
 CREATE INDEX idx_canchas_ubicacion ON canchas USING GIST (ubicacion);
 
--- Búsqueda de disponibilidad
-CREATE INDEX idx_reservas_slot ON reservas (cancha_id, slot_inicio, slot_fin)
-  WHERE estado IN ('PENDIENTE_PAGO', 'CONFIRMADA');
+-- Búsqueda de disponibilidad. Sin WHERE: la grilla del día consulta todos los
+-- estados, y quién ocupa el turno se decide después (ver la guía de
+-- disponibilidad). Este índice acelera la lectura; NO impide el doble booking.
+CREATE INDEX idx_reservas_cancha_slot ON reservas (cancha_id, slot_inicio, slot_fin);
 
 -- Filtro por tipo de cancha
 CREATE INDEX idx_canchas_tipo ON canchas (tipo) WHERE deleted_at IS NULL;
