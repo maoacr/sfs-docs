@@ -143,9 +143,71 @@ Se puede, y debe seguir pudiéndose. La deuda no caduca porque el partido se
 jugó, y prohibirlo crearía deuda impagable con el jugador bloqueado de por
 vida.
 
+### Cobrar y cerrar el turno son un solo momento
+
+En una cancha **se termina de pagar inmediatamente después del partido**. O sea
+que la secuencia real es: termina el partido → entra la plata. Hay un momento,
+corto pero real, en que «se jugó» ya es verdad y «se pagó» todavía no.
+
+Por eso el cobro ofrece **«Ya terminó el partido»**: registra el pago y marca la
+reserva como jugada en un gesto, que es lo que de verdad pasó en el mostrador.
+Lo decide `seOfreceCerrarAlCobrar` (`src/lib/acciones-de-reserva.ts`) y se
+ofrece cuando hay saldo y la reserva todavía no está `COMPLETADA`.
+
+:::caution[Arranca sin marcar, y no es un descuido]
+El cobro también pasa **antes** del partido: el jugador llega y completa lo que
+debía. Si la casilla viniera marcada, cada cobro previo al partido escribiría
+que el partido se jugó — un hecho que nadie afirmó.
+
+Es el mismo criterio que [cobrar al agendar](#cobrar-al-agendar): el formulario
+declara el hecho, no lo asume el default.
+:::
+
+:::danger[La plata primero, el cierre después — nunca al revés]
+Son dos requests: `POST /reservas/:id/confirmar-pago` y después
+`PUT /reservas/:id` con `COMPLETADA`. El orden importa y no es casual.
+
+Si falla el cierre, el cobro **ya quedó asentado** y lo único pendiente es
+volver a marcar el partido; el error lo dice así: *«Cobramos el saldo, pero no
+pudimos cerrar el turno»*. Al revés habría un turno cerrado con plata que nunca
+se registró, que es la falla que no se puede permitir: la plata que entró tiene
+que dejar fila.
+:::
+
+Un cobro **parcial** con el partido terminado deja la reserva **jugada y
+debiendo**. Está bien y se avisa en el formulario: esa deuda sigue en cuentas
+por cobrar y le bloquea reservar. Exigir saldo cero para cerrar es exactamente
+la regla que creó [el callejón](#se-jugó-y-se-pagó-son-ejes-distintos).
+
+### Qué puede hacer el dueño con una reserva
+
+Las cuatro preguntas viven en `src/lib/acciones-de-reserva.ts`, no en el JSX de
+cada pantalla:
+
+| Pregunta | Cuándo es sí |
+|---|---|
+| `sePuedeCobrar` | Hay saldo y la reserva no está muerta — **no mira el estado del partido** |
+| `sePuedeMarcarJugada` | No está muerta y no es `COMPLETADA` — **no mira el saldo** |
+| `sePuedeCancelar` | No está muerta |
+| `seOfreceCerrarAlCobrar` | Se puede cobrar **y** se puede marcar jugada |
+
+«Muerta» es `CANCELADA` o `EXPIRADA`. `COMPLETADA` **no** está ahí: un partido
+jugado sigue admitiendo cobro.
+
+El módulo no tiene JSX a propósito. Las pantallas que ofrecen estas acciones
+pintan distinto —botones chicos en una fila, o un modal— y compartir el markup
+habría terminado pasando `className` por props. Lo que no puede divergir es la
+decisión, no el padding.
+
 ## El mostrador
 
-El dueño cobra desde **Cobros** (`/owner/cobros`) o desde el panel del día.
+El dueño cobra desde **Cobros** (`/owner/cobros`), desde el panel del día
+(`/owner/reservas`) o desde el **dashboard**, donde las tarjetas de «Pendientes
+de completar» se abren y muestran el detalle de la reserva —horario, jugador,
+total, pagado, saldo y el último intento de pago— con las tres acciones.
+
+Ese detalle **no consulta nada**: todo eso ya viene en la respuesta de
+`GET /api/reservas`, así que abrirlo no cuesta un viaje más al servidor.
 
 La pantalla de cuentas por cobrar filtra **por saldo, no por estado**: se puede
 deber estando `PENDIENTE_PAGO`, `PAGO_PARCIAL` o `COMPLETADA`. El endpoint es
