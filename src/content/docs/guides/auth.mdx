@@ -86,15 +86,30 @@ Dos cosas que importan y no son obvias:
 
 Lo que hay que tener en su lugar, y dónde:
 
+Hay **dos proyectos de Supabase** (ver [Entornos](/guides/entornos)), y casi todo esto se configura en los dos.
+
 | Dónde | Qué |
 |---|---|
-| Google Cloud Console → Authorized redirect URIs | `https://<ref>.supabase.co/auth/v1/callback` — el callback de **Supabase**, no el de la app |
+| Google Cloud Console → Authorized redirect URIs | `https://<ref>.supabase.co/auth/v1/callback` — el callback de **Supabase**, no el de la app. **Uno por proyecto**: producción y `sfs-dev` tienen refs distintos |
 | Google Cloud Console → Test users | Si la consent screen está en *Testing*, hay que agregarse o Google bloquea |
-| Supabase → Sign In / Providers → Google | Habilitado, con el Client ID y el Secret que emite Google |
-| Supabase → URL Configuration → Redirect URLs | El origen desde el que se prueba, con puerto. El botón manda `redirectTo: ${window.location.origin}/auth/callback` |
-| `.env` | `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key moderna) |
+| Supabase → Sign In / Providers → Google | Habilitado, con el Client ID y el Secret que emite Google. **En cada proyecto** |
+| Supabase → URL Configuration → Site URL | El origen del entorno: `https://sfs.maoacr.com` en producción, `http://localhost:3000` en `sfs-dev` |
+| Supabase → URL Configuration → Redirect URLs | `<origen>/auth/callback`, con puerto si lo hay. El botón manda `redirectTo: ${window.location.origin}/auth/callback`, así que tiene que figurar el origen exacto de ese entorno |
+| `.env` | `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key moderna) del proyecto que corresponda |
 
 Los *Authorized JavaScript origins* de Google se dejan **vacíos**: en este flujo el browser nunca le habla a Google directamente.
+
+:::danger[Si el redirect no está en el allow-list, GoTrue cae al *Site URL* sin avisar]
+No hay error, no hay log: el usuario simplemente aterriza en otra parte con el token colgado del fragment. Con el *Site URL* en `http://localhost:3000`, el login de producción manda a `http://localhost:3000/auth/callback#access_token=…` y no inicia sesión. Ese fue el síntoma exacto del primer login en `sfs.maoacr.com`.
+
+Para reconocerlo: mirar **dónde aterriza** el browser. Si es un origen que no es el que se usó para entrar, es este fallback — no un problema del código.
+:::
+
+:::note[Sondear `/auth/v1/authorize` con curl no sirve para diagnosticarlo]
+Ese endpoint **no valida** el `redirect_to`: lo devuelve tal cual, incluso uno inventado como `https://evil.example.com/x`. La validación ocurre después, en `/auth/v1/callback`, cuando Google vuelve. Sondear el primero da un falso positivo.
+
+Y si lo que falta fuese el URI de Google, el síntoma sería distinto: `Error 400: redirect_uri_mismatch` **antes** de escribir la contraseña. Llegar al callback equivocado prueba que Google ya hizo su parte bien.
+:::
 
 ## Recuperación de contraseña
 
