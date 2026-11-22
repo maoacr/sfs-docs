@@ -270,6 +270,31 @@ un TTL de quince, y es exactamente lo que el mensaje ya le promete al jugador
 —«esperá unos minutos antes de volver a intentar»—, así que ahora la copia y el
 comportamiento coinciden.
 
+#### El consejo tiene que caber en el plazo del turno
+
+Lo destapó la tarjeta **CALL**. Ante `cc_rejected_call_for_authorize` el mensaje
+mandaba a llamar al banco **como única salida** — y el turno se libera a los
+`TTL_PAGO_MINUTOS`, que son quince.
+
+En la prueba el rechazo entró con la reserva recién creada: catorce minutos para
+pasar un menú telefónico, conseguir un humano, lograr la autorización y volver a
+pagar. Mientras la persona está en espera, el turno se le libera y vuelve a una
+reserva que ya no existe.
+
+El mensaje ahora ofrece **primero otra tarjeta**, avisa que el turno queda
+reservado sólo unos minutos, y deja la llamada como alternativa. Es el mismo
+orden en que lo ofrece la pantalla de MercadoPago, que pone «Pagar con otro
+medio» antes que la llamada.
+
+:::note[Por qué no se extendió el TTL en cambio]
+El turno es un recurso escaso: retenerlo más tiempo perjudica a quien lo quiere
+reservar. La respuesta correcta no es aflojar el plazo, es decirle la verdad a
+la persona.
+:::
+
+Regla general para estos mensajes: **un consejo que no entra en el plazo que
+imponemos no es un consejo, es una trampa.**
+
 #### El dueño ve lo que vio el jugador
 
 `GET /api/reservas` devuelve `ultimoPago`, y el panel del día lo **ignoraba**:
