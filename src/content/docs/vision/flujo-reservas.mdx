@@ -62,7 +62,7 @@ Jugador selecciona slot
    - El jugador completa el 100% del pago en MercadoPago (vía webhook), O
    - El dueño marca manualmente el pago como verificado desde su panel
 
-7. **Reservas manuales del dueño**: cuando el owner crea una reserva manual, pasa directamente a estado `CONFIRMADA` (no requiere pago).
+7. **Reservas manuales del dueño**: no pasan por `PENDIENTE_PAGO` ni tienen TTL — el dueño garantiza el turno. Queda `CONFIRMADA` salvo que haya cobrado un **abono real**, y ahí es `PAGO_PARCIAL`. Agendar sin cobrar nada también es `CONFIRMADA`, debiendo todo: `PAGO_PARCIAL` con cero pagado sería un turno ocupado para siempre afirmando un pago que no existió. Ver [Cobrar al agendar](/guides/cobros#cobrar-al-agendar).
 
 ## Pago parcial
 
