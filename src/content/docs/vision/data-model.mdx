@@ -66,7 +66,7 @@ erDiagram
 
     User {
         uuid id PK
-        string email UK
+        string email "UK, nullable"
         string password_hash
         string primer_nombre
         string segundo_nombre "nullable"
@@ -227,11 +227,28 @@ erDiagram
 
 Tabla única para dueños y jugadores. El campo `role` determina los permisos.
 
+:::note[Una cuenta puede existir sin poder entrar]
+`email` y `password_hash` son los dos nullables, y juntos describen una cuenta
+que **existe pero todavía no es de nadie**: la que el dueño crea en el mostrador
+para quien cayó a jugar y no está registrado.
+
+Hace falta que exista porque `reservas.player_id` es `NOT NULL`. Sin esa
+cuenta, la reserva quedaba a nombre del dueño y **su deuda también** — ver
+[Clientes](/guides/cobros#quien-no-está-en-el-sistema-se-registra-en-el-momento).
+
+Sin email no puede entrar: `login` y `recuperar` buscan con
+`eq(usuarios.email, ...)` y un `eq` nunca matchea NULL. El email es lo que
+después le permite **reclamarla** al entrar con Google.
+
+Que el índice siga siendo único **no impide varios nulos**: en Postgres los
+NULL no colisionan entre sí. Es el mismo arreglo que ya tenía `google_sub`.
+:::
+
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | `UUID` PK | Generado por Prisma (`@default(uuid())`) |
-| `email` | `VARCHAR(255)` UNIQUE | Login + notificaciones |
-| `password_hash` | `VARCHAR(255)` | bcrypt, nunca el password plano |
+| `email` | `VARCHAR(255)` UNIQUE **nullable** | Login + notificaciones. Null en los clientes que el dueño registró en el mostrador sin email — ver abajo |
+| `password_hash` | `VARCHAR(255)` nullable | bcrypt, nunca el password plano. Null si la cuenta no entra con contraseña: las de Google y las del mostrador |
 | `primer_nombre` | `VARCHAR(50)` | Primer nombre |
 | `segundo_nombre` | `VARCHAR(50)` nullable | Segundo nombre (opcional) |
 | `apellidos` | `VARCHAR(100)` | Apellidos completos |
