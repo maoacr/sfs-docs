@@ -306,20 +306,69 @@ La contracara es que un cliente nuevo no aparece — y para eso existe el camino
 del invitado.
 :::
 
-Si la persona no está registrada **no se bloquea nada**: sería inventarle
-fricción al mostrador. El nombre queda en `reservas.invitado_nombre`. Sin esa
-columna la información se perdía, porque `player_id` es `NOT NULL` y termina
-apuntando a la cuenta del propio dueño. El día que esa persona se registre, hay
-un hilo del que tirar.
+### Quien no está en el sistema se registra en el momento
 
-:::danger[Pendiente: un invitado que queda debiendo bloquea al dueño]
-Como la reserva de un invitado apunta a la cuenta del **dueño**, si queda en
-`PAGO_PARCIAL` con saldo, ese saldo es del dueño. Y como el bloqueo se mide
-contra el titular, el dueño queda sin poder agendar —ni invitados ni a sí
-mismo— hasta que se registre ese cobro. Encima el mensaje que recibiría es el
-de deudor: "Tenés saldo pendiente".
+Si la persona no aparece en el buscador, el modal ofrece **registrarla ahí
+mismo** (`POST /api/clientes`, owner-only). Queda con cuenta propia y la
+reserva se vincula a ella como con cualquier cliente.
 
-Hoy no hay ninguna reserva de invitado en la base, así que nadie lo pisó.
-Arreglarlo pide una decisión de producto —¿la deuda de un invitado cuenta?, ¿y
-contra quién?— y no se tomó todavía.
+:::danger[Por qué se dejó de anotar invitados]
+El camino viejo guardaba el nombre en `reservas.invitado_nombre` y dejaba la
+reserva a nombre del **dueño**, porque `player_id` es `NOT NULL`.
+
+Eso tenía una consecuencia que nadie había notado: si ese invitado quedaba
+debiendo, **el saldo era del dueño**. Y como el bloqueo se mide contra el
+titular, el dueño quedaba sin poder agendar —ni invitados ni a sí mismo— hasta
+registrar ese cobro, con el mensaje de deudor encima: «Tenés saldo pendiente».
+Un invitado que se va debiendo congelaba el mostrador entero.
+
+Nunca se disparó porque no llegó a haber reservas de invitado. Con cuenta
+propia para cada cliente, la deuda cae donde corresponde y el problema no
+existe.
+:::
+
+**La cuenta nace sin contraseña y todavía no puede entrar.** `login` y
+`recuperar` buscan con `eq(usuarios.email, ...)`, y un `eq` nunca matchea NULL:
+la cuenta existe, pero todavía no es de nadie.
+
+El email es lo que después le permite **reclamarla**. Al entrar con Google,
+`decidirVinculo` (`src/lib/google-auth.ts`) la encuentra por email y le entrega
+la cuenta con su historial. Ese mecanismo ya existía; el registro del mostrador
+sólo crea la fila.
+
+#### Qué se le puede pedir a alguien en un mostrador
+
+`crearClienteSchema` es `registerSchema` menos tres cosas:
+
+| Lo que no está | Por qué |
+|---|---|
+| `password` | La persona no eligió ninguna. Si el dueño inventara una, sería una credencial válida sobre la cuenta de otro |
+| `role` | Un cliente es siempre `PLAYER`. Leerlo del body sería un camino para que un dueño fabrique dueños |
+| `email` obligatorio | Alcanza con nombre y apellido, lo único que las columnas exigen `NOT NULL` |
+
+:::caution[El email no bloquea, y es deliberado]
+Mucha gente da el nombre y a lo sumo el teléfono. Un campo obligatorio que no
+se puede llenar **no produce datos, produce basura**: quien atiende tipea
+`a@a.com` para pasar el campo, y en una columna única eso explota en el segundo
+uso — además de dejar la deuda de un desconocido asociada a un email real.
+
+Vacío se guarda como `NULL`, nunca como string vacío: un `""` ocuparía el
+índice único.
+
+El email se **trimea antes de validarse**. En un mostrador se tipea apurado y
+se pega desde cualquier lado, y `" juan@gmail.com "` no pasa la validación.
+Rechazar a alguien por un espacio sería culparlo de algo que podemos arreglar
+solos.
+:::
+
+Un email **ya registrado** devuelve `409` y no toca nada: no se pisa la cuenta
+de otro ni se dice de quién es. El dueño tipeó ese email, así que confirmarle
+que existe no le revela nada que no sepa.
+
+:::note[Callejón conocido]
+El buscador sólo encuentra a quien ya reservó con ese dueño, así que alguien
+con cuenta que nunca jugó ahí no aparece — y al registrarlo con su email real
+se come el `409`. La salida que ofrece el mensaje es registrarlo sin email y
+agregárselo después. Vincular la reserva a esa cuenta existente sin revelar sus
+datos es una decisión que todavía no se tomó.
 :::
